@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Macros
 
-(defpackage rhododendron.macros
+(defpackage lurk.macros
   (:use :common-lisp)
   (:nicknames :macros)
   (:export
@@ -12,7 +12,7 @@
    #:*dbg #:display #:dbreak #:isetq
    #:symbolconc))
 
-(in-package rhododendron.macros)
+(in-package lurk.macros)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun symbolconc (&rest symbols)

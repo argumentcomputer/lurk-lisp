@@ -1,6 +1,6 @@
-(in-package rhododendron.api.impl)
+(in-package lurk.api.impl)
 
-(def-suite* api-impl-suite :in rhododendron:master-suite)
+(def-suite* api-impl-suite :in lurk:master-suite)
 
 (defstruct closure env function)
 

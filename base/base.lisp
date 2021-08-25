@@ -1,4 +1,4 @@
-(defpackage rhododendron
+(defpackage lurk
   (:use :common-lisp)
   (:nicknames :rd)
   (:import-from :it.bese.FiveAm #:in-suite #:def-suite #:test #:is #:run! #:signals)
@@ -7,7 +7,7 @@
    #:random-elt
    ))
 
-(in-package rhododendron)
+(in-package lurk)
 
 (def-suite master-suite)
 

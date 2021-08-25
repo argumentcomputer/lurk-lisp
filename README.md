@@ -1,5 +1,5 @@
-# rhododendron
-Lisp counterpart to [dendron](https://github.com/porcuquine/dendron) -- providing a language (name TBD) for Turing-complete recursive SNARKs.
+# lurk
+Lisp counterpart to [lurk-rs](https://github.com/porcuquine/lurk-rs) -- providing Lurk language for Turing-complete recursive SNARKs.
 
 # Installation
 
@@ -47,14 +47,14 @@ QuickLisp needs to find the project, so add a symlink:
 
 ```bash
 > cd ~/quicklisp/local-projects
-> ln -s ~/<installdir>/rhododendron/rhododendron.asd rhododendron.asd
+> ln -s ~/<installdir>/lurk/lurk.asd lurk.asd
 ```
 # Test
 
 Running tests should show output similar to the following.
 ```bash
-(base) ➜  rhododendron git:(master) ✗ make test
-bin/cl -Q -sp rhododendron -x "(asdf:test-system \"rhododendron\")"
+(base) ➜  lurk git:(master) ✗ make test
+bin/cl -Q -sp lurk -x "(asdf:test-system \"lurk\")"
 
 Running test suite MASTER-SUITE
  Running test suite API-IMPL-SUITE
@@ -68,21 +68,21 @@ Running test suite MASTER-SUITE
     Fail: 0 ( 0%)
 
 T
-(base) ➜  rhododendron git:(master) ✗
+(base) ➜  lurk git:(master) ✗
 ```
 
 # REPL
 
 Run the REPL with `make repl`.
 
-The example below shows loading [a library](example/lib.rh), running [code using it](example/test.rh), then clearing so the library is unavailable.
+The example below shows loading [a library](example/lib.lurk), running [code using it](example/test.lurk), then clearing so the library is unavailable.
 
 ```bash
-(base) ➜  rhododendron git:(master) ✗ make repl
-bin/cl -Q -sp rhododendron -p rhododendron.api.tooling -E run-repl
-PACKAGE => #<PACKAGE "RHODODENDRON.USER">
+(base) ➜  lurk git:(master) ✗ make repl
+bin/cl -Q -sp lurk -p lurk.api.tooling -E run-repl
+PACKAGE => #<PACKAGE "LURK.USER">
 
-Rhododendron REPL.
+Lurk REPL.
 :help for help.
 
 > :help
@@ -94,25 +94,25 @@ Rhododendron REPL.
 :CLEAR => Clear loaded libraries.
 :RUN <PATH> => Evaluate expression from file.
 
-> :load "example/lib.rh"
-Reading from example/lib.rh.
+> :load "example/liblurk"
+Reading from example/lib.lurk.
 
-> :run "example/test.rh"
-Reading from example/test.rh.
+> :run "example/test.lurk"
+Reading from example/test.lurk.
 Run: (SQUARE 8)
 
 64
 > :clear
 
-> :run "example/test.rh"
-Reading from example/test.rh.
+> :run "example/test.lurk"
+Reading from example/test.lurk.
 Run: (SQUARE 8)
-ERROR: Unbound var: RHODODENDRON.USER::SQUARE
+ERROR: Unbound var: LURK.USER::SQUARE
 > (+ 1 (* 8 8))
 
 65
 > :quit
-(base) ➜  rhododendron git:(master) ✗ 
+(base) ➜  lurk git:(master) ✗ 
 ```
 
 # Documentation

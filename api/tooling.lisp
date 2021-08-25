@@ -1,9 +1,9 @@
-(in-package rhododendron.api.tooling)
+(in-package lurk.api.tooling)
 
-(def-suite* api-tooling-suite :in rhododendron:master-suite)
+(def-suite* api-tooling-suite :in lurk:master-suite)
 
 (defparameter *prompt* "> ")
-(defparameter *repl-package* (find-package :rhododendron.user))
+(defparameter *repl-package* (find-package :lurk.user))
 (defparameter *default-field-order* 1009)
 
 (defstruct repl-state package env evaluator p prompt in out)
@@ -13,7 +13,7 @@
   (repl))
 
 (defun repl (&key (in *standard-input*) (out *standard-output*) (package *repl-package*) (p *default-field-order*) (prompt *prompt*))
-  (rhododendron.macros:display package)
+  (lurk.macros:display package)
   (let ((state (make-repl-state :package package
                                 :env (impl:empty-env)
                                 :evaluator (impl:make-evaluator p)
@@ -21,7 +21,7 @@
                                 :prompt prompt
                                 :in in
                                 :out out)))
-    (format out "Rhododendron REPL.~%:help for help.~%")
+    (format out "Lurk REPL.~%:help for help.~%")
     (loop while state do
       (handler-case (let* ((*package* (repl-state-package state))
                            (input (read-with-prompt state :in in :out out)))

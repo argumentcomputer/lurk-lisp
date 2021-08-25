@@ -1,12 +1,12 @@
 .PHONY : always
 
-image : bin/rhododendron.image
+image : bin/lurk.image
 
-bin/rhododendron.image : $(shell find . -type f -name '*.lisp') $(shell find . -type f -name '*.asd')
-	bin/cl -Q -sp rhododendron --dump bin/rhododendron.image
+bin/lurk.image : $(shell find . -type f -name '*.lisp') $(shell find . -type f -name '*.asd')
+	bin/cl -Q -sp lurk --dump bin/lurk.image
 
 test : always
-	bin/cl -Q -sp rhododendron -x "(asdf:test-system \"rhododendron\")"
+	bin/cl -Q -sp lurk -x "(asdf:test-system \"lurk\")"
 
 repl :
-	bin/cl -Q -sp rhododendron -p rhododendron.api.tooling -E run-repl
+	bin/cl -Q -sp lurk -p lurk.api.tooling -E run-repl

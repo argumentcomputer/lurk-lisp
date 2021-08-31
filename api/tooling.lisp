@@ -10,9 +10,10 @@
 
 (defun run-repl (&rest args)
   (declare (ignore args))
-  (repl))
+  (repl :cli t))
 
-(defun repl (&key (in *standard-input*) (out *standard-output*) (package *repl-package*) (p *default-field-order*) (prompt *prompt*))
+(defun repl (&key (in *standard-input*) (out *standard-output*) (package *repl-package*) (p *default-field-order*) (prompt *prompt*)
+               cli)
   (lurk.macros:display package)
   (let ((state (make-repl-state :package package
                                 :env (impl:empty-env)
@@ -34,7 +35,8 @@
         (error (e) (format (repl-state-out state) "ERROR: ~A" e))
         (condition (c) (format (repl-state-out state) "~A" c))
         ))
-    (sb-ext:exit)))
+    (when cli
+      (sb-ext:exit))))
 
 (defun eval-expr (expr state)
   (funcall (repl-state-evaluator state) expr (repl-state-env state)))

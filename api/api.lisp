@@ -26,8 +26,9 @@
 ;; NOTE: This is too permissive.
 (deftype expr1 (&optional p) `(or (atom ,p) (sexp ,p) (cons (sexp ,p) (sexp ,p))))
 
-(deftype expr2 (&optional p) `(cons (expr1 ,p)))
-
+(deftype expr2 (&optional p) `(or (cons (expr1 ,p))
+                                  ;; We need this to handle recursive envs with multiple bindings.
+                                  (cons (cons (expr1 ,p)))))
 
 ;; Since it is awkward to express both the constraint on field size and the
 ;; recursive type in the COMMON LISP type system, we provide a second type,
@@ -79,8 +80,9 @@
   (labels ((eval-expr (expr env)
            (eval-expr-for-p p expr env))
          (apply-closure (closure args env)
-           (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args)))
-             (values (apply (closure-function closure) (closure-env closure) evaled-args) env))))
+           (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
+                  (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
+             (values (apply (closure-function closure) (closure-env closure) quoted-args) env))))
     (etypecase expr
       ((or closure self-evaluating-symbol) (values expr env))
       (symbol
@@ -93,6 +95,11 @@
        (destructuring-bind (head &rest rest) expr
          (etypecase head
            (closure (apply-closure head env rest))
+           ((eql api:atom)
+            (destructuring-bind (x) rest
+              (typecase (eval-expr x env)
+                (atom (values t env))
+                (t (values nil env)))))
            ((eql api:let*)
             (destructuring-bind (bindings body-expr) rest
               (let ((new-env env))
@@ -116,7 +123,6 @@
               ;; only one expression is permitted rather than allow the
               ;; confusing possibility of wastefully including some ignored
               ;; first expressions in the body.
-              ; (assert (endp (cdr body)))
               (let* ((env-var (gensym "ENV"))
                      (source `(lambda (,env-var ,@args)
                                 (eval-expr-for-p ,p
@@ -206,10 +212,10 @@
 
 (defun* extend-rec ((env env) (var expr) (val expr))
   (check-type var symbol)
-  (destructuring-bind (&optional binding-or-env rest)
+  (destructuring-bind (&optional binding-or-env . rest)
       env
     (declare (ignore rest))
-    (destructuring-bind (&optional var-or-binding val-or-more-bindings)
+    (destructuring-bind (&optional var-or-binding . val-or-more-bindings)
         binding-or-env
       (declare (ignore val-or-more-bindings))
       (etypecase var-or-binding
@@ -237,6 +243,10 @@
         (signals error (evaluate 'b env))
         (signals error (evaluate 'b env2))
         (signals error (evaluate 'a env3)))
+
+      (is (eql t (evaluate '(api:atom 8) empty-env)))
+      (is (eql t (evaluate '(api:atom 'a) empty-env)))
+      (is (eql nil (evaluate '(api:atom '(1 2 3)) empty-env)))
 
       (signals error (evaluate 'x empty-env))
 
@@ -311,13 +321,33 @@
                                       (adder (make-adder 1)))
                              (adder 8))
                            empty-env)))
+      (is (eql 8 (evaluate '(api:letrec* ((pow (api:lambda (base)
+                                                 (api:lambda (exp)
+                                                   (api:if (api:= exp 0)
+                                                           1
+                                                           (api:* base ((pow base) (api:- exp 1))))))))
+                             ((pow 2) 3))
+                           empty-env)))
       (is (eql 8 (evaluate '(api:letrec* ((pow (api:lambda (base exp)
                                                  (api:if (api:= exp 0)
                                                          1
                                                          (api:* base (pow base (api:- exp 1)))))))
                              (pow 2 3))
                            empty-env)))
-      (is (eq (hlist (hcons 'b 9) (hcons 'a 8)) (evaluate '(api:let* ((a 8) (b 9)) (api:current-env)) empty-env))))))
+      (is (eq (hlist (hcons 'b 9) (hcons 'a 8)) (evaluate '(api:let* ((a 8) (b 9)) (api:current-env)) empty-env)))
+
+      (let ((lib-env (evaluate '(api:letrec* ((pow (api:lambda (base exp)
+                                                     (api:if (api:= exp 0)
+                                                             1
+                                                             (api:* base (pow base (api:- exp 1)))))))
+                                 (api:current-env))
+                               empty-env)))
+        (is (eql 8 (evaluate '(pow 2 3) lib-env))))
+
+      ;; Regression test to ensure function arguments are evaluated only once.
+      (is (eq (hlist 1) (evaluate '(api:letrec* ((f (api:lambda (x) x)))
+                                    (f '(1)))
+                                  nil))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -325,7 +355,7 @@
 (defparameter *default-p* #x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001 
   "Order of BLS12-381's scalar field. (Default *for now*.)")
 
-(defun e (expr env)
+(defun eval (expr env)
   "Convenience function to evaluate without specifying field order."
   (eval-expr-for-p *default-p* expr env))
 

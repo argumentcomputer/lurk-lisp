@@ -3,8 +3,8 @@
   (:nicknames :api)
   (:use :common-lisp)
   ;; QUOTE and NIL are not shadowed, to ease list syntax handling.
-  (:shadow #:car #:cdr #:cons #:eq #:if #:lambda #:list #:t #:+ #:- #:* #:/ #:=)
-  (:export #:car #:cdr #:cons #:current-env #:eq #:if #:lambda #:let* #:letrec* #:list #:nil #:quote #:t #:+ #:- #:* #:/ #:=))
+  (:shadow #:atom #:car #:cdr #:cons #:eq #:if #:lambda #:list #:t #:+ #:- #:* #:/ #:=)
+  (:export #:atom #:car #:cdr #:cons #:current-env #:eq #:if #:lambda #:let* #:letrec* #:list #:nil #:quote #:t #:+ #:- #:* #:/ #:=))
 
 (defpackage lurk.api.impl
   (:nicknames :api.impl)
@@ -14,8 +14,8 @@
   (:import-from :defstar #:defvar* #:defun* #:defgeneric* #:defmethod* #:lambda* #:nlet #:*let #:result
                 #:-> #:labels*)
   (:import-from :lurk.macros #:display #:symbolconc #:awhen #:it)
-  (:shadow atom)
-  (:export #:eval-expr #:empty-env #:make-evaluator #:*default-p*))
+  (:shadow #:atom #:eval)
+  (:export #:eval #:eval-expr #:empty-env #:make-evaluator #:*default-p*))
 
 (defpackage lurk.api.tooling
   (:nicknames :tooling)
@@ -31,4 +31,4 @@
 
 (defpackage lurk.user
   (:nicknames :lu)
-  (:use :lurk.api.tooling :lurk.api))
+  (:use :lurk.api.tooling :lurk.api :lurk.api.impl))

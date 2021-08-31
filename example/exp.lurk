@@ -1,0 +1,6 @@
+(letrec* ((exp (lambda (base exponent)
+                 (if (= 0 exponent)
+                     1
+                     (* base (exp base (- exponent 1)))))))
+         (current-env))
+

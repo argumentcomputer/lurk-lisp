@@ -137,6 +137,7 @@
                                 (eval-expr a env)
                                 (eval-expr b env))))
                 (values result env))))
+           #+(or) ;; Disabled initially, since variadic functions aren't simple in other implementations.
            ((eql api:list)
             (values (hlist* (mapcar (lambda (x) (eval-expr x env)) rest))
                     env))
@@ -302,9 +303,10 @@
       ;; This test will fail without QUOTE-EXPR.
       (is (eql t (evaluate '(api:eq (api:cons 'a 'b) '(a . b)) empty-env)))
 
-      (is (equal '(1 2 3) (evaluate '(api:list 1 2 3) empty-env)))
-      (is (eql t (evaluate '(api:eq (api:cons 1 (api:cons 2 (api:cons 3 api:nil))) (api:list 1 2 3)) empty-env)))
-      (is (eql t (evaluate '(api:eq (api:cons 1 (api:cons 2 (api:cons 3 api:nil))) (api:list 1 (api:+ 1 1) 3)) empty-env)))
+      ;; Keep and uncomment when LIST is supported.
+      ;; (is (equal '(1 2 3) (evaluate '(api:list 1 2 3) empty-env)))
+      ;; (is (eql t (evaluate '(api:eq (api:cons 1 (api:cons 2 (api:cons 3 api:nil))) (api:list 1 2 3)) empty-env)))
+      ;; (is (eql t (evaluate '(api:eq (api:cons 1 (api:cons 2 (api:cons 3 api:nil))) (api:list 1 (api:+ 1 1) 3)) empty-env)))
 
       (is (eql 1 (evaluate '(api:if api:t 1 2) empty-env)))
       (is (eql 2 (evaluate '(api:if api:nil 1 2) empty-env)))

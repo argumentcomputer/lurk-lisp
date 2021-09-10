@@ -9,4 +9,4 @@ test : always
 	bin/cl -Q -sp lurk -x "(asdf:test-system \"lurk\")"
 
 repl :
-	bin/cl -Q -sp lurk -p lurk.api.tooling -E run-repl
+	bin/repl

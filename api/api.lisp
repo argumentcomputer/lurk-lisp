@@ -169,26 +169,31 @@
     (eval-expr-for-p p expr env)))
 
 (defun* (lookup -> (values expr boolean)) ((var symbol) (env env))
+  (lookup-helper var env (lambda (result found-p)
+                           (if found-p
+                               (values result found-p)
+                               (error "Unbound var: ~S" var)))))
+(defun* (lookup-helper -> (values expr boolean)) ((var symbol) (env env) (k function))
   (if (endp env)
-      (error "Unbound var: ~S" var)
+      (funcall k nil nil)
       (destructuring-bind (key . val)
           (car env)
         (etypecase key
           (list
            ;; If KEY is a list, then (CAR ENV) is a recursive env.
-           (multiple-value-bind (result found-p)
-               (lookup var (car env))
-             (cond
-               (found-p
-                (typecase result
-                  ;(function (break)  (values result found-p))
-                  (closure (values (extend-closure result (car env)) found-p))
-                  (t (values result found-p))))
-               (t
-                 (lookup var (cdr env))))))
+           (lookup-helper var (car env)
+                          (lambda (result found-p)
+                            (cond
+                              (found-p
+                               (typecase result
+                                 ;;(function (break)  (values result found-p))
+                                 (closure (funcall k (extend-closure result (car env)) found-p))
+                                 (t (funcall k result found-p))))
+                              (t
+                               (lookup-helper var (cdr env) k))))))
           (symbol (if (eql var key)
-                      (values val t)
-                      (lookup var (cdr env))))))))
+                      (funcall k val t)
+                      (lookup-helper var (cdr env) k)))))))
 
 (defun* (empty-env -> env) ())
 
@@ -201,13 +206,12 @@
   (check-type var symbol)
   (destructuring-bind (&optional binding-or-env . rest)
       env
-    (declare (ignore rest))
     (destructuring-bind (&optional var-or-binding . val-or-more-bindings)
         binding-or-env
       (declare (ignore val-or-more-bindings))
       (etypecase var-or-binding
         ((or symbol nil) (hcons (hlist (hcons var val)) env))
-        (cons (hlist (hcons (hcons var val) binding-or-env)))))))
+        (cons (hcons (hcons (hcons var val) binding-or-env) rest))))))
 
 (test eval-expr-for-p
   (let* ((p 1009)
@@ -335,7 +339,15 @@
       ;; Regression test to ensure function arguments are evaluated only once.
       (is (eq (hlist 1) (evaluate '(api:letrec* ((f (api:lambda (x) x)))
                                     (f '(1)))
-                                  nil))))))
+                                  nil)))
+
+      ;; Regression: ensure that letrec* does not forget old bindings.
+      (is (eq (hcons 1 1) (evaluate '(api:let* ((disj (api:lambda (g1 g2) (api:lambda (x) (api:cons (g1 x) (g2 x))))))
+                                      (api:letrec* ((foo (disj (api:lambda (x) x) (api:lambda (x) x))))
+                                       (foo 1)))
+                                    nil)))
+
+      )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

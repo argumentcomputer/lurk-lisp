@@ -9,13 +9,20 @@
                         :components
                         ((:file "base")
                          (:file "macros")))
+               (:module "impl"
+                        :depends-on ("base")
+                        :serial t
+                        :components
+                        ((:file "package")
+                         (:file "lang")))
                (:module "api"
                         :depends-on ("base")
                         :serial t
                         :components
                         ((:file "package")
                          (:file "api")
-                         (:file "tooling"))))
+                         (:file "tooling")))
+)
   :in-order-to ((test-op (load-op "lurk")))
   :perform (test-op (o c)
 		    (flet ((run-suite (suite) (symbol-call :fiveam :run! suite)))

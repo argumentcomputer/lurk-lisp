@@ -94,7 +94,7 @@ Lurk REPL.
 :CLEAR => Clear loaded libraries.
 :RUN <PATH> => Evaluate expression from file.
 
-> :load "example/liblurk"
+> :load "example/lib.lurk"
 Reading from example/lib.lurk.
 
 > :run "example/test.lurk"

@@ -1,5 +1,4 @@
 (in-package lurk.api.impl)
-
 (def-suite* api-impl-suite :in lurk:master-suite)
 
 (defstruct closure env function)
@@ -19,32 +18,19 @@
 ;; An ATOM is a FIELD-ELEMENT, SYMBOL, FUNCTION, or NIL.
 (deftype atom (&optional p) `(or (field-element ,p) symbol nil function closure))
 
-;; An SEXP is an ATOM or a (possibly improper) list beginning with an ATOM.
-(deftype sexp (p) `(or (atom ,p) (cons (atom ,p))))
-
-;; An EXPR1 is an ATOM or a (possibly improper) list beginning with an SEXP.
-;; NOTE: This is too permissive.
-(deftype expr1 (&optional p) `(or (atom ,p) (sexp ,p) (cons (sexp ,p) (sexp ,p))))
-
-(deftype expr2 (&optional p) `(or (cons (expr1 ,p))
-                                  ;; We need this to handle recursive envs with multiple bindings.
-                                  (cons (cons (expr1 ,p)))))
-
 ;; Since it is awkward to express both the constraint on field size and the
 ;; recursive type in the COMMON LISP type system, we provide a second type,
 ;; EXPR*.
-(defun expr*-p (x)
+(defun expr-p (x)
   (typecase x
-    (cons (and (expr*-p (car x)) (expr*-p (cdr x))))
+    (cons (and (expr-p (car x)) (expr-p (cdr x))))
     (t (typep x 'atom))))
-
-(deftype expr* () `(satisfies expr*-p))
 
 ;; Although there are still unhandled edge cases (e.g. function signatures are
 ;; unrestricted by this type), the intent is that EXPR is a tree of CONS cells
 ;; terminating in ATOMs. EXPRs need not be balanced or homogenous in shape. A
 ;; single ATOM is a zero-height tree.
-(deftype expr (&optional p) `(and expr* (or (expr1 ,p) (expr2 ,p))))
+(deftype expr () `(satisfies expr-p))
 
 (test atom
   (let* ((p 11)
@@ -398,3 +384,6 @@
           for inv = (inverse i p)
           do (is (= i (inverse inv p)))
           do (is (= 1 (mod (* i inv) p))))))
+
+(test type-regression
+  (is (not (null (typep '(((((VAR DUMMY)))) Z) 'expr)))))

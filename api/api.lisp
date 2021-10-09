@@ -169,31 +169,32 @@
     (eval-expr-for-p p expr env)))
 
 (defun* (lookup -> (values expr boolean)) ((var symbol) (env env))
-  (lookup-helper var env (lambda (result found-p)
-                           (if found-p
-                               (values result found-p)
-                               (error "Unbound var: ~S" var)))))
-(defun* (lookup-helper -> (values expr boolean)) ((var symbol) (env env) (k function))
+  (multiple-value-bind (result found-p)
+      (lookup-find var env)
+      (if found-p
+          result
+          (error "Unbound var: ~S" var))))
+(defun* (lookup-find -> (values expr boolean)) ((var symbol) (env env))
   (if (endp env)
-      (funcall k nil nil)
+      (values nil nil)
       (destructuring-bind (key . val)
           (car env)
         (etypecase key
           (list
            ;; If KEY is a list, then (CAR ENV) is a recursive env.
-           (lookup-helper var (car env)
-                          (lambda (result found-p)
-                            (cond
-                              (found-p
-                               (typecase result
-                                 ;;(function (break)  (values result found-p))
-                                 (closure (funcall k (extend-closure result (car env)) found-p))
-                                 (t (funcall k result found-p))))
-                              (t
-                               (lookup-helper var (cdr env) k))))))
+           (multiple-value-bind (result found-p)
+               (lookup-find var (car env))
+             (cond
+               (found-p
+                (typecase result
+                  ;(function (break)  (values result found-p))
+                  (closure (values (extend-closure result (car env)) found-p))
+                  (t (values result found-p))))
+               (t
+                 (lookup-find var (cdr env))))))
           (symbol (if (eql var key)
-                      (funcall k val t)
-                      (lookup-helper var (cdr env) k)))))))
+                      (values val t)
+                      (lookup-find var (cdr env))))))))
 
 (defun* (empty-env -> env) ())
 

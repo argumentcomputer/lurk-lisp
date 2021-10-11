@@ -344,7 +344,7 @@
 (deftype recursive-env (var-type val-type) `(or null (cl:cons (simple-env ,var-type ,val-type)
                                                               list ;(env ,var-type ,val-type)
                                                               )))
-    
+
 (deftype env (var-type val-type) `(or (simple-env ,var-type ,val-type) (recursive-env ,var-type ,val-type)))
 
 (defun empty-symbol-env () ())
@@ -356,6 +356,9 @@
   (:method ((env list) (var symbol) (val t))
     (check-type val expressible)
     (cl:cons (cl:cons var val) env))
+  (:method ((env nill) (var nill) (val nill))
+    ;; This can happen when an empty binding list is supplied.
+    env)
   (:method ((env t) (var sym) (val t))
     ;; (check-type val expression)
     (cons (cons var val) env)))
@@ -363,7 +366,7 @@
 (defun* (extend-closure -> fun) ((f fun) (rec-env hlist))
   (let* ((fn (copy-fn (fun-value f)))
          (closed-env (fn-closed-env fn))
-         (extended (cons rec-env closed-env))) 
+         (extended (cons rec-env closed-env)))
     (disp :extending-closure fn closed-env extended)
     (setf (fn-closed-env fn) extended)
     (fun fn)))
@@ -458,12 +461,6 @@
    (saved-env :initarg :saved-env :reader saved-env)
    (body :initarg :body :reader let-body)))
 
-(defun* maybe-wrap-continuation ((cont continuation))
-  (:returns (values continuation &optional))
-  (if (typep cont 'outermost-continuation)
-      (progn (disp :wrapping) (make-instance 'continuation :continuation cont))
-      cont))
-
 (defclass error-continuation (continuation)
   ((message :initarg :message :initform "ERROR-CONTINUATION" :reader error-message)
    (args :initarg :args :initform () :reader error-args)))
@@ -535,6 +532,7 @@
 
 (defclass car-continuation (continuation) ())
 (defclass cdr-continuation (continuation) ())
+(defclass atom-continuation (continuation) ())
 
 (deftype hlist () `(or nill hcons))
 
@@ -714,7 +712,7 @@ This will yield the following environment:
               (assert (hnull rest-body))
               (if (hnull bindings)
                   ;; TODO: Refactor.
-                  (values body1 env (maybe-wrap-continuation cont))
+                  (values body1 env cont))
                   (let-cons ((binding1 rest-bindings) bindings)
                     (disp binding1 rest-bindings)
                     (let-cons ((var more-vals) binding1)
@@ -729,7 +727,7 @@ This will yield the following environment:
                                                          :var var
                                                          :body expanded
                                                          :saved-env env
-                                                         :continuation (maybe-wrap-continuation cont)))))))))))
+                                                         :continuation cont)))))))))
          ((eq (sym 'letrec*) head)
           (disp :interpreting-as-letrec*)
           (let-cons ((bindings body) rest)
@@ -739,7 +737,7 @@ This will yield the following environment:
               (assert (hnull rest-body))
               (if (hnull bindings)
                   ;; TODO: Refactor.
-                  (values body1 env (maybe-wrap-continuation cont))
+                  (values body1 env cont)
                   (let-cons ((binding1 rest-bindings) bindings)
                     (disp binding1 rest-bindings)
                     (let-cons ((var more-vals) binding1)
@@ -754,7 +752,7 @@ This will yield the following environment:
                                                          :var var
                                                          :body expanded
                                                          :saved-env env
-                                                         :continuation (maybe-wrap-continuation cont)))))))))))
+                                                         :continuation cont))))))))))
          ;; TODO: Implement LIST.
          ((eq (sym 'cons) head)
           (let-cons ((arg1 more) rest)
@@ -823,7 +821,9 @@ This will yield the following environment:
                    ((eq head (sym 'car))
                     (values arg env (make-instance 'car-continuation :continuation cont)))
                    ((eq head (sym 'cdr))
-                    (values arg env (make-instance 'cdr-continuation :continuation cont)))    
+                    (values arg env (make-instance 'cdr-continuation :continuation cont)))
+                   ((eq head (sym 'atom))
+                    (values arg env (make-instance 'atom-continuation :continuation cont)))
                    (t (disp :interpreting-as-call fn arg)
                       (let ((continuation (make-instance 'call-continuation
                                                          :continuation cont
@@ -838,7 +838,7 @@ This will yield the following environment:
                  ;; possibility that a built-in be shadowed.
                  (let ((expanded (expression<- `((,fn ,arg) . ,more-args))))
                    (disp :interpreting-as-multiarg-call fn arg more-args expanded)
-                   (values expanded env (maybe-wrap-continuation cont)))))))))))))
+                   (values expanded env cont))))))))))))
 
 (defgeneric* invoke-continuation ((cont continuation) (result expression) (new-env (or nill hcons)))
   (:method :around ((cont t) (result t) (new-env t))
@@ -863,13 +863,8 @@ This will yield the following environment:
                  (newer-cont
                   (make-instance 'call2-continuation
                                  :fun result
-                                 ;; Return to the previous continuation after the new one.
-                                 ;; We never need to return to the current continuation.
-                                 ;; MAYBE-WRAP-CONTINUATION wraps the previous continuation,
-                                 ;; in case it is the OUTERMOST-CONTINUATION, so we don't return
-                                 ;; prematurely from OUTER-EVALUTE.
                                  :saved-env (saved-env cont)
-                                 :continuation (maybe-wrap-continuation (continuation cont)))))
+                                 :continuation (continuation cont))))
             (disp :invoking-call-continuation function next-expr)
             ;; Only one arg supported for now.
             (check-type (cdr (call-args cont)) null)
@@ -918,7 +913,7 @@ This will yield the following environment:
       (values (let-body cont) extended-env
               c)))
   (:method ((cont letrec*-continuation) (result t) (new-env t))
-    (disp :letrec*-continuation cont result new-env)    
+    (disp :letrec*-continuation cont result new-env)
     (let ((extended-env (extend-rec new-env (let-var cont) result))
           (c (make-instance 'call3-continuation
                             :continuation (continuation cont)
@@ -950,6 +945,12 @@ This will yield the following environment:
   (:method ((cont cdr-continuation) (arg t) (env t))
     (disp :cdr-continuation arg)
     (make-thunk (continuation cont) (hcdr arg) env))
+  (:method ((cont atom-continuation) (arg t) (env t))
+    (disp :atom-continuation arg)
+    (make-thunk (continuation cont) (typecase arg
+                                      (hcons (nill))
+                                      (t (sym t)))
+                env))
   (:method ((cont relop-continuation) (arg1 t) (new-env t))
     (disp :relop-continuation cont (relop-operator cont) arg1 new-env)
     (let-cons ((arg2 rest) (more-args cont))
@@ -1038,7 +1039,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 7 iterations))
+        (is (= 6 iterations))
         (is (eq val result-expr))
         (is (null continuation))))))
 
@@ -1056,7 +1057,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 14 iterations))
+        (is (= 13 iterations))
         (is (eq val result-expr))
         (is (null continuation))))))
 
@@ -1074,7 +1075,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 17 iterations))
+        (is (= 16 iterations))
         (is (eq val result-expr))
         (is (null continuation))))))
 
@@ -1093,7 +1094,7 @@ This will yield the following environment:
                         (empty-sym-env)
                         :limit limit)
       (declare (ignore new-env))
-      (is (= 17 iterations))
+      (is (= 16 iterations))
       ;; And it is matched correctly here.
       (is (eq val2 result-expr))
       (is (null continuation)))))
@@ -1110,7 +1111,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 19 iterations))
+        (is (= 18 iterations))
         (is (eq val result-expr))
         (is (null continuation))))))
 
@@ -1208,7 +1209,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 18 iterations))
+        (is (= 17 iterations))
         (is (eq result-expr (num 5)))
         (is (null continuation))))))
 
@@ -1222,7 +1223,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 5 iterations))
+        (is (= 4 iterations))
         (is (eq result-expr (num 1)))
         (is (null continuation))))))
 
@@ -1237,7 +1238,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 7 iterations))
+        (is (= 8 iterations))
         (is (eq (cons (num 1) (num 2)) result-expr))
         (is (null continuation))))))
 
@@ -1256,7 +1257,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 24 iterations))
+        (is (= 23 iterations))
         (is (eq result-expr (num 6)))
         (is (null continuation))))))
 
@@ -1279,7 +1280,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 30 iterations))
+        (is (= 29 iterations))
         (is (eq (num 20) result-expr))
         (is (null continuation))))))
 
@@ -1304,7 +1305,7 @@ This will yield the following environment:
         ;; machine/store, then the cost won't be repeated on every call. In fact,
         ;; compilation can help even ad-hoc functions iff calls happen repeatedly
         ;; to the extent that compilation overhead is paid for by the savings.
-        (is (= 5 iterations))
+        (is (= 4 iterations))
         (is (eq (num 2) result-expr))
         (is (null continuation))))))
 
@@ -1334,7 +1335,7 @@ This will yield the following environment:
         ;; machine/store, then the cost won't be repeated on every call. In fact,
         ;; compilation can help even ad-hoc functions iff calls happen repeatedly
         ;; to the extent that compilation overhead is paid for by the savings.
-        (is (= 24 iterations))
+        (is (= 23 iterations))
         (is (eq (num 20) result-expr))
         (is (null continuation))))))
 
@@ -1354,7 +1355,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 28 iterations))
+        (is (= 27 iterations))
         (is (eq (sym t) result-expr))
         (is (null continuation))))))
 
@@ -1382,7 +1383,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 46 iterations))
+        (is (= 45 iterations))
         (is (eq x result-expr))
         (is (null continuation)))
       (multiple-value-bind (result-expr new-env iterations continuation)
@@ -1400,7 +1401,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 43 iterations))
+        (is (= 42 iterations))
         (is (eq y result-expr))
         (is (null continuation))))))
 
@@ -1421,7 +1422,7 @@ This will yield the following environment:
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 42 iterations))
+        (is (= 41 iterations))
         (is (eq x result-expr))
         (is (null continuation))))))
 
@@ -1532,7 +1533,7 @@ circuit-based evaluator.
         ;; 100 => (2922, 325)
         ;; 1000 => (29022, 2610)
         ;; ITERATIONS = BASE * 29 + 22
-        (is (= 118 iterations))
+        (is (= 117 iterations))
         (is (= 81 (store-size *content-store*)))
         (is (eq (num (expt (num-value base) (num-value exponent)))
                 result-expr))
@@ -1573,7 +1574,7 @@ circuit-based evaluator.
         ;; 100 => (3023, 325)
         ;; 1000 => (30023, 2610)
         ;; ITERATIONS = BASE * 30 + 23
-        (is (= 122 iterations))
+        (is (= 121 iterations))
         (is (= 81 (store-size *content-store*)))
         (is (eq (num (expt (num-value base) (num-value exponent)))
                 result-expr))
@@ -1609,7 +1610,7 @@ circuit-based evaluator.
         ;; 100 => (2325, 325)
         ;; 1000 => (23025, 2610)
         ;; ITERATIONS = BASE * 23 + 25
-        (is (= 100 iterations))
+        (is (= 99 iterations))
         (is (= 81 (store-size *content-store*)))
         (is (eq (num (expt (num-value base) (num-value exponent)))
                 result-expr))
@@ -1644,7 +1645,7 @@ circuit-based evaluator.
         ;; 100 => (3928, 652)
         ;; 1000 => (39028, 5221)
         ;; ITERATIONS = BASE * 39 + 28
-        (is (= 161 iterations))
+        (is (= 160 iterations))
         (is (= 81 (store-size *content-store*)))
         (is (eq (num (expt (num-value base) (num-value exponent)))
                 result-expr))
@@ -1686,7 +1687,7 @@ circuit-based evaluator.
         ;; 100 => (3231, 652)
         ;; 1000 => (32031, 5221)
         ;; ITERATIONS = BASE * 32 + 31
-        (is (= 140 iterations))
+        (is (= 139 iterations))
         (is (= 108 (store-size *content-store*)))
         (is (eq (num (expt (num-value base) (num-value exponent)))
                 result-expr))
@@ -1708,7 +1709,7 @@ circuit-based evaluator.
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 32 iterations))
+        (is (= 31 iterations))
         (is (eq (sym t) result-expr))
         (is (null continuation)))
 
@@ -1757,7 +1758,7 @@ circuit-based evaluator.
         (outer-evaluate (expression<- `(let ((a 9))))
                         (empty-sym-env)
                         :limit limit)
-      (is (= 5 iterations))
+      (is (= 4 iterations))
       (is (hnull result-expr))
       (is (null continuation))
       )))
@@ -1793,7 +1794,7 @@ circuit-based evaluator.
                         (empty-sym-env)
                         :limit limit)
       (declare (ignore new-env))
-      (is (= 20 iterations))
+      (is (= 19 iterations))
       (is (eq (num 2) result-expr))
       (is (null continuation)))
 
@@ -1806,7 +1807,7 @@ circuit-based evaluator.
                         (empty-sym-env)
                         :limit limit)
       (declare (ignore new-env))
-      (is (= 20 iterations))
+      (is (= 19 iterations))
       (is (eq (num 3) result-expr))
       (is (null continuation)))))
 
@@ -1830,7 +1831,7 @@ circuit-based evaluator.
                         (empty-sym-env)
                         :limit limit)
       (declare (ignore new-env))
-      (is (= 17 iterations))
+      (is (= 16 iterations))
       (is (eq (num 10) result-expr))
       (is (null continuation)))))
 
@@ -1865,7 +1866,7 @@ circuit-based evaluator.
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 110 iterations))
+        (is (= 109 iterations))
         (is (eq (num 123) result-expr))
         (is (null continuation))))))
 
@@ -1883,10 +1884,100 @@ circuit-based evaluator.
                           (empty-sym-env)
                           :limit limit)
         (declare (ignore new-env))
-        (is (= 118 iterations))
+        (is (= 117 iterations))
         (is (eq (num 123) result-expr))
         (is (null continuation))
         ))))
+
+(test outer-evaluate-make-tree
+  (with-fresh-stores
+    (let ((limit 800))
+      (multiple-value-bind (result-expr new-env iterations continuation)
+          (outer-evaluate (expression<- `(letrec* ((mapcar (lambda (f list)
+                                                             (if (eq list nil)
+                                                                 nil
+                                                                 (cons (f (car list)) (mapcar f (cdr list))))))
+                                         (make-row (lambda (list)
+                                                     (if (eq list nil)
+                                                         nil
+                                                         (let ((cdr (cdr list)))
+                                                           (cons (cons (car list) (car cdr))
+                                                                 (make-row (cdr cdr)))))))
+                                         (make-tree-aux (lambda (list)
+                                                          (let ((row (make-row list)))
+                                                            (if (eq (cdr row) nil)
+                                                                row
+                                                                (make-tree-aux row)))))
+                                         (make-tree (lambda (list)
+                                                      (car (make-tree-aux list))))
+                                         (reverse-tree (lambda (tree)
+                                                         (if (atom tree)
+                                                             tree
+                                                             (cons (reverse-tree (cdr tree))
+                                                                   (reverse-tree (car tree)))))))
+                                (reverse-tree
+                                 (make-tree '(a b c d e f g h))
+                                 )
+                                ))
+                          (empty-sym-env)
+                          :limit limit)
+        (declare (ignore new-env))
+        (is (= 616 iterations))
+        (is (eq (expression<- '(((h . g) . (f . e)) . ((d . c) . (b . a)))) result-expr))
+        (is (null continuation))))))
+
+(test outer-evaluate-multiple-letrecstar-bindings
+  (with-fresh-stores
+    (let ((limit 800))
+      (multiple-value-bind (result-expr new-env iterations continuation)
+          (outer-evaluate (expression<- `(letrec* ((double (lambda (x) (* 2 x)))
+                                                   (square (lambda (x) (* x x))))
+                                                  (+ (square 3) (double 2))))
+                          (empty-sym-env)
+                          :limit limit)
+        (declare (ignore new-env))
+        (is (= 31 iterations))
+        (is (eq (num 13) result-expr))
+        (is (null continuation))))))
+
+(test outer-evaluate-multiple-letrecstar-bindings-referencing
+  (with-fresh-stores
+    (let ((limit 800))
+      (multiple-value-bind (result-expr new-env iterations continuation)
+          (outer-evaluate (expression<- `(letrec* ((double (lambda (x) (* 2 x)))
+                                                   (double-inc (lambda (x) (+ 1 (double x)))))
+                                                  (+ (double 3) (double-inc 2))))
+                          (empty-sym-env)
+                          :limit limit)
+        (declare (ignore new-env))
+        (is (= 43 iterations))
+        (is (eq (num 11) result-expr))
+        (is (null continuation))))))
+
+(test outer-evaluate-multiple-letrecstar-bindings-recursive
+  (with-fresh-stores
+    (let ((limit 800))
+      (multiple-value-bind (result-expr new-env iterations continuation)
+          (outer-evaluate (expression<- `(letrec* ((exp (lambda (base exponent)
+                                                          (if (= 0 exponent)
+                                                              1
+                                                              (* base (exp base (- exponent 1))))))
+                                                   (exp2 (lambda (base exponent)
+                                                           (if (= 0 exponent)
+                                                               1
+                                                               (* base (exp2 base (- exponent 1))))))
+                                                   (exp3 (lambda (base exponent)
+                                                           (if (= 0 exponent)
+                                                               1
+                                                               (* base (exp3 base (- exponent 1)))))))
+                                                  (+ (+ (exp 3 2) (exp2 2 3))
+                                                     (exp3 4 2))))
+                          (empty-sym-env)
+                          :limit limit)
+        (declare (ignore new-env))
+        (is (= 308 iterations))
+        (is (eq (num 33) result-expr))
+        (is (null continuation))))))
 
 (test let-restore-saved-env
   (with-fresh-stores
@@ -2019,7 +2110,7 @@ circuit-based evaluator.
                             (empty-sym-env)
                             :limit limit)
           (declare (ignore new-env))
-          (is (= 229 iterations))
+          (is (= 228 iterations))
           (is (eq (num 3) result-expr))
           (is (null continuation))))
       (with-library (demo-library)
@@ -2028,7 +2119,7 @@ circuit-based evaluator.
                             (empty-sym-env)
                             :limit limit)
           (declare (ignore new-env))
-          (is (= 270 iterations))
+          (is (= 269 iterations))
           (is (eq (nill) result-expr))
           (is (null continuation)))))))
 
@@ -2047,7 +2138,7 @@ circuit-based evaluator.
     (is (typep c 'hcons))
     (is (typep c 'expression))
     (is (not (typep c 'sym))))
-  (let ((s (sym 'aardavark)))
+  (let ((s (sym 'aardvark)))
     (is (typep s 'sym))
     (is (typep s 'expression))
     (is (not (typep s 'hcons)))))

@@ -174,26 +174,32 @@
       (if found-p
           result
           (error "Unbound var: ~S" var))))
+
+;; Looks up VAR in ENV and returns three values:
+;; 1. The bound value, if any.
+;; 2. A boolean indicating whether a binding was found.
+;; 3. The immediately enclosing environment, if a binding was found.
 (defun* (lookup-find -> (values expr boolean)) ((var symbol) (env env))
   (if (endp env)
-      (values nil nil)
+      (values nil nil nil)
       (destructuring-bind (key . val)
           (car env)
         (etypecase key
           (list
            ;; If KEY is a list, then (CAR ENV) is a recursive env.
-           (multiple-value-bind (result found-p)
+           (multiple-value-bind (result found-p in-env)
                (lookup-find var (car env))
              (cond
                (found-p
                 (typecase result
-                  ;(function (break)  (values result found-p))
-                  (closure (values (extend-closure result (car env)) found-p))
-                  (t (values result found-p))))
+                  (closure
+                   ;; Extend the closure with the environment in which it was found.
+                   (values (extend-closure result in-env) found-p))
+                  (t (values result found-p env))))
                (t
                  (lookup-find var (cdr env))))))
           (symbol (if (eql var key)
-                      (values val t)
+                      (values val t env)
                       (lookup-find var (cdr env))))))))
 
 (defun* (empty-env -> env) ())
@@ -348,7 +354,10 @@
                                        (foo 1)))
                                     nil)))
 
+      (signals error (evaluate '(api:letrec* ((a (api:lambda (x) (b x))) (b (api:lambda (x) (api:* x x)))) (a 9)) empty-env))
       )))
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

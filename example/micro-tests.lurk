@@ -1,0 +1,11 @@
+(letrec*
+    ((mk1 ((== 5 5) empty-state))
+     (mk2 ((call/fresh (lambda (q) (== q 5))) empty-state))
+     (mk3 (take-all (a-and-b empty-state)))
+     (mk4 (take 1 ((call/fresh (lambda (q) (fives q))) empty-state)))
+     (mk5 (car (((appendo '(a) '(b) '(a b)) empty-state))))
+     (mk6 (car (((appendo2 '(a) '(b) '(a b)) empty-state))))
+     (mk7 (take 2 (call-appendo empty-state)))
+     (mk8 (take 2 (call-appendo2 empty-state)))
+     )
+  (current-env))

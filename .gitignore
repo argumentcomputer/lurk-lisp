@@ -1,4 +1,4 @@
 *.fasl
 *~
 scratch
-bin/rhododendron.image
+bin/*.image

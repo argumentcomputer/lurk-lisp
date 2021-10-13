@@ -6,5 +6,4 @@
                 #:-> #:labels*)
   (:import-from :lurk.macros #:display #:symbolconc)
   (:shadow #:type #:cons)
-  (:export
-   #:cont-result))
+  (:export #:atom #:car #:cdr #:cons #:current-env #:eq #:if #:lambda #:let* #:letrec* #:nil #:quote #:t #:+ #:- #:* #:/ #:=))

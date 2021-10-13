@@ -8,5 +8,12 @@ bin/lurk.image : $(shell find . -type f -name '*.lisp') $(shell find . -type f -
 test : always
 	bin/cl -Q -sp lurk -x "(asdf:test-system \"lurk\")"
 
-repl :
+# Run repl after dumping image if needed.
+# Faster startup than replx, except when dumping a new image.
+repl : image
 	bin/repl
+
+# Run repl after loading Lurk.
+# Slower startup than replx afer image is dumped, but faster for one-off runs.
+replx :
+	bin/replx

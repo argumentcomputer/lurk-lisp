@@ -47,7 +47,7 @@
 (defgeneric* format-result-values ((repl repl) (state repl-state) (values list))
   (:method ((repl repl) (state repl-state) (values list))
     (let ((evaled (car values)))
-      (format-output repl (repl-state-out state) "~%~S" evaled)))
+      (format-output repl (repl-state-out state) "~S~%" evaled)))
 
   (:method :after ((repl impl-repl) (state repl-state) (values list))
     (destructuring-bind (evaled new-env iterations)
@@ -67,10 +67,11 @@
     (:api (make-instance 'api-repl))
     (:impl (make-instance 'impl-repl))))
 
-(defun repl (&key (in *standard-input*) (out *standard-output*) (field-order *default-field-order*) (prompt *prompt*)
+(defun repl (&key (in *standard-input*) (out *standard-output*) (field-order *default-field-order*) (prompt nil prompt-p)
                cli (type *repl-type*))
   (let* ((repl (make-repl type))
          (package (repl-package repl))
+         (prompt (if prompt-p prompt (format nil "~A~A" (identifier repl) *prompt*)))
          (state (make-repl-state :package package
                                  :env (empty-env repl)
                                  :evaluator (make-evaluator repl field-order)
@@ -83,15 +84,18 @@
       (handler-case (let* ((*package* (repl-state-package state))
                            (input (read-with-prompt state :in in :out out)))
                       (multiple-value-bind (new-state input command-p)
-                          (maybe-handle-repl-command state input)
+                          (maybe-handle-repl-command repl state input)
                         (cond
                           (command-p (setq state new-state))
-                          (t (let ((result-values (multiple-value-list (eval-expr input state))))
-                               (format-result-values repl state result-values))))))
+                          (t (handle-expr repl input state)))))
         (error (e) (format (repl-state-out state) "ERROR: ~A" e))
         (condition (c) (format (repl-state-out state) "~A" c))))
     (when cli
       (sb-ext:exit))))
+
+(defun handle-expr (repl input state)
+  (let ((result-values (multiple-value-list (eval-expr input state))))
+    (format-result-values repl state result-values)))
 
 (defun eval-expr (expr state)
   (funcall (repl-state-evaluator state) expr (repl-state-env state)))
@@ -102,7 +106,7 @@
     (force-output out)
     (read in)))
 
-(defun maybe-handle-repl-command (state input)
+(defun maybe-handle-repl-command (repl state input)
   (case input
     (:help
      (print-help (repl-state-out state))
@@ -118,19 +122,26 @@
             (new-state (load-lib state pathname)))
        (values new-state input t)))
     (:run
-     (let* ((pathname (read-form state))
-            (to-run (read-from-file state pathname)))
-       ;; This is a hack. Pretend this was not a command, and replace the input with expression from file.
-       (values state to-run nil)))
+     (let ((pathname (read-form state)))
+       (with-open-file (in pathname :direction :input)
+         (loop for (to-run inputp) = (multiple-value-list (read-one-form state in pathname))
+               while inputp do (handle-expr repl to-run state))
+           ;; This is a hack. Pretend this was not a command, and replace the input with expression from file.
+         (values state nil t))))
     (:clear
      (let ((new-state (copy-repl-state state)))
        (setf (repl-state-env new-state) (api-impl:empty-env))
        (values new-state input t)))
     (t (values state input nil))))
 
+
 (defun read-form (state)
-  (let* ((*package* (repl-state-package state)))
-    (read (repl-state-in state))))
+  (let* ((*package* (repl-state-package state))
+         (form (read (repl-state-in state) nil 'eof)))
+    ;; NOTE: 'LURK.TOOLING.REPL::EOF is not in *PACKAGE*.
+    (if (eq form 'eof)
+        (values nil nil)
+        (values form t))))
 
 (defun load-lib (state pathname)
   (let* ((to-load (read-from-file state pathname))
@@ -141,11 +152,15 @@
 
 (defun read-from-file (state pathname)
   (with-open-file (in pathname :direction :input)
-    (format (repl-state-out state) "Reading from ~A.~%" pathname)
-    (let* ((*package* (repl-state-package state))
-           (result (read in)))
-      (format (repl-state-out state) "Read: ~S~%" result)
-      result)))
+    (read-one-form state in pathname)))
+
+(defun read-one-form (state in pathname)
+  (let* ((*package* (repl-state-package state))
+         (form (read in nil 'eof)))
+    (cond
+      ((eq form 'eof) (values nil nil))
+      (t (format (repl-state-out state) "Read from ~A: ~S~%" pathname form)
+         (values form t)))))
 
 (defparameter *commands*
   '((:help () "Print this text.")
@@ -153,7 +168,7 @@
     (:echo (form) " Read one form and echo it.")
     (:load (path) "Load a library.")
     (:clear () "Clear loaded libraries.")
-    (:run (path) "Evaluate expression from file.")))
+    (:run (path) "Evaluate expressions from file.")))
 
 (defun print-help (out)
   (loop for (command args help-text) in *commands*

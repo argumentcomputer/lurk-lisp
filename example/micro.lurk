@@ -57,10 +57,10 @@
                        ((f (var c)) (cons (car s/c) (+ c 1)))))))
 
      (mplus
-      (lambda (x1 x2)
-        (if (nullp x1) x2
-            (if (pairp x1) (cons (car x1) (mplus (cdr x1) x2))
-                (lambda () (mplus x2 (x1)))))))
+      (lambda (x1 x3)
+        (if (nullp x1) x3
+            (if (pairp x1) (cons (car x1) (mplus (cdr x1) x3))
+                (lambda () (mplus x3 (x1)))))))
 
      (bind
       (lambda (x g)

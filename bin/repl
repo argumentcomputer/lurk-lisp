@@ -2,7 +2,7 @@
 # This gives much faster startup but may require dumping an up-to-date image.
 
 if [[ $(which rlwrap) ]]; then
-    rlwrap bin/cl -m bin/lurk.image -Q -sp lurk -p lurk.api.tooling -E run-repl
+    rlwrap bin/cl -m bin/lurk.image -Q -sp lurk -p lurk.tooling.repl -E run-repl -- $@
 else
-    bin/cl -m bin/lurk.image -Q -sp lurk -p lurk.api.tooling -E run-repl
+    bin/cl -m bin/lurk.image -Q -sp lurk -p lurk.tooling.repl -E run-repl -- $@
 fi

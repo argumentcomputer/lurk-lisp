@@ -1,5 +1,5 @@
 if [[ $(which rlwrap) ]]; then
-    rlwrap bin/cl -Q -sp lurk -p lurk.api.tooling -E run-repl
+    rlwrap bin/cl -Q -sp lurk -p lurk.tooling.repl -E run-repl -- $@
 else
-    bin/cl -Q -sp lurk -p lurk.api.tooling -E run-repl
+    bin/cl -Q -sp lurk -p lurk.tooling.repl -E run-repl -- $@
 fi

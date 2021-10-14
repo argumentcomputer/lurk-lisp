@@ -451,7 +451,7 @@
 
 (defclass call3-continuation (tail-continuation-mixin restore-env-mixin continuation) ())
 
-(defclass let-continuation (continuation)
+(defclass let*-continuation (continuation)
   ((var :initarg :var :reader let-var)
    (saved-env :initarg :saved-env :reader saved-env)
    (body :initarg :body :reader let-body)))
@@ -703,7 +703,7 @@ This will yield the following environment:
                      (function (fun (make-fn :arg arg :body inner-body :closed-env env))))
                 (disp :interpreting-as-lambda head function inner-body env)
                 (make-thunk cont function env)))))
-         ((eq (sym 'let) head)
+         ((eq (sym 'let*) head)
           (disp :interpreting-as-let)
           (let-cons ((bindings body) rest)
             (disp bindings)
@@ -723,7 +723,7 @@ This will yield the following environment:
                                             body1
                                             (expression<- `(let ,rest-bindings
                                                              ,body1)))))
-                          (values val env (make-instance 'let-continuation
+                          (values val env (make-instance 'let*-continuation
                                                          :var var
                                                          :body expanded
                                                          :saved-env env
@@ -794,6 +794,9 @@ This will yield the following environment:
             (values condition env (make-instance 'if-continuation
                                                  :more-args more
                                                  :continuation cont))))
+         ((eq (sym 'current-env) head)
+          (assert (hnull rest))
+          (make-thunk cont env env))
          (t
           ;; (fn . args)
           (let ((fn head)
@@ -904,8 +907,8 @@ This will yield the following environment:
          (values body-form newer-env (continuation cont)))
         (t
          (values body-form newer-env (make-instance 'call3-continuation :continuation (continuation cont) :saved-env (saved-env cont)))))))
-  (:method ((cont let-continuation) (result t) (new-env t))
-    (disp :let-continuation cont (continuation cont) result new-env)
+  (:method ((cont let*-continuation) (result t) (new-env t))
+    (disp :let*-continuation cont (continuation cont) result new-env)
     (let ((extended-env (extend new-env (let-var cont) result))
           (c (make-instance 'call3-continuation
                             :continuation (continuation cont)
@@ -985,7 +988,8 @@ This will yield the following environment:
   (let ((next-cont (make-instance 'outermost-continuation))
         (next-expr expr)
         (next-env env))
-    (loop for i from 1 to limit do
+    (loop for i from 1
+          while (or (not limit) (< i limit)) do
          (multiple-value-bind (new-expr new-env new-cont)
              (eval-expr next-expr next-env next-cont)
            (disp :outer-evaluate-loop i new-expr new-env new-cont)
@@ -1501,6 +1505,12 @@ circuit-based evaluator.
 (defvar *limit* 1000)
 (defun evaluate (form &key (limit *limit*))
   (outer-evaluate (expression<- form) (empty-sym-env) :limit limit))
+
+(defun* make-evaluator ((field-order integer))
+  (declare (ignore field-order)) ;; FIXME: make arithmetic modular.
+  ;; FIXME: handle LIMIT.
+  (lambda (form env)
+    (outer-evaluate (expression<- form) env :limit nil)))
 
 (test outer-evaluate-recursion
   (with-fresh-stores

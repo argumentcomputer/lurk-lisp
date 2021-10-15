@@ -3,14 +3,23 @@
 (def-suite* api-tooling-suite :in lurk:master-suite)
 
 (defparameter *prompt* "> ")
-(defparameter *default-field-order* 1009)
+(defparameter *default-field-order* lurk.api.impl:*default-p*)
 (defparameter *repl-type* :api)
 
-(defstruct repl-state package env evaluator field-order prompt in out)
+(defstruct repl-state package env evaluator field-order prompt in out readtable)
 
 (defclass repl () ())
 (defclass api-repl (repl) ())
 (defclass impl-repl (repl) ())
+
+(defun bang-reader (stream char)
+  (declare (ignore char))
+  (list '! (read stream t nil t)))
+
+(defun make-repl-readtable ()
+  (let ((*readtable* (copy-readtable nil)))
+    (set-macro-character #\! #'bang-reader)
+    *readtable*))
 
 (defgeneric* repl-package ((repl repl))
   (:method ((repl api-repl))
@@ -21,6 +30,11 @@
 (defgeneric* identifier ((repl repl))
   (:method ((repl api-repl)) :api)
   (:method ((repl impl-repl)) :impl))
+
+(defgeneric* repl-nil ((repl repl))
+  (:method ((repl api-repl)) nil)
+  (:method ((repl impl-repl)) (lurk.lang::sym nil)))
+
 
 (defgeneric* empty-env ((repl repl))
   (:method ((repl api-repl))
@@ -53,24 +67,48 @@
     (destructuring-bind (evaled new-env iterations)
         values
       (declare (ignore evaled new-env))
-      (format-output repl (repl-state-out state) "~%count: ~D" iterations))))
+      (format-output repl (repl-state-out state) "count: ~D~%" iterations))))
+
+(defun keywordize (string)
+  (intern (string-upcase string) :keyword))
+
+(opts:define-opts
+    (:name :help
+           :description "print this help text"
+           :short #\h
+           :long "help")
+    (:name :nb
+           :description "here we want a number argument"
+           :short #\n
+           :long "nb"
+           :arg-parser #'parse-integer) ;; <- takes an argument
+    (:name :type
+           :description "REPL type"
+           :short #\t
+           :long "type"
+           :arg-parser #'keywordize))
 
 (defun run-repl (&rest args)
-  (let* ((type-arg (cadr (assoc "--TYPE" args :test #'string= :key #'string-upcase)))
-         (type (if type-arg
-                   (intern (string-upcase type-arg) :keyword)
-                   *repl-type*)))
-    (repl :cli t :type type)))
+  (declare (ignore args))
+  (multiple-value-bind (opts free-args)
+      (opts:get-opts)
+    (let* ((type-arg (getf opts :type))
+           (type (if type-arg
+                     (intern (string-upcase type-arg) :keyword)
+                     *repl-type*)))
+      (repl :cli t :type type))))
 
 (defun* make-repl ((type keyword))
   (ecase type
     (:api (make-instance 'api-repl))
     (:impl (make-instance 'impl-repl))))
 
+
 (defun repl (&key (in *standard-input*) (out *standard-output*) (field-order *default-field-order*) (prompt nil prompt-p)
                cli (type *repl-type*))
   (let* ((repl (make-repl type))
          (package (repl-package repl))
+         (readtable (make-repl-readtable))
          (prompt (if prompt-p prompt (format nil "~A~A" (identifier repl) *prompt*)))
          (state (make-repl-state :package package
                                  :env (empty-env repl)
@@ -78,7 +116,8 @@
                                  :field-order field-order
                                  :prompt prompt
                                  :in in
-                                 :out out)))
+                                 :out out
+                                 :readtable readtable)))
     (format out "Lurk REPL [~A].~%:help for help.~%" (identifier repl))
     (loop while state do
       (handler-case (let* ((*package* (repl-state-package state))
@@ -93,15 +132,37 @@
     (when cli
       (sb-ext:exit))))
 
+(deftype meta-form () '(cons (eql !) t))
+
 (defun handle-expr (repl input state)
-  (let ((result-values (multiple-value-list (eval-expr input state))))
-    (format-result-values repl state result-values)))
+  (typecase input
+    (meta-form
+     (destructuring-bind (bang meta-form)
+         input
+       (declare (ignore bang))
+       (handle-meta-form repl state meta-form)))
+    (t (let ((result-values (multiple-value-list (eval-expr input state))))
+         (format-result-values repl state result-values)))))
+
+(defun handle-meta-form (repl state form)
+  (typecase form
+    (cons
+     (destructuring-bind (head . rest)
+         form
+     (case head
+       (:assert
+        (assert (not (eq (repl-nil repl) (eval-expr (car rest) state)))))
+       (:assert-eq
+        (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state))))
+       (t (format (repl-state-out repl) "Unhandled: ~S" head)))))
+    (t (format (repl-state-out repl) "Unhandled: ~S" form))))
 
 (defun eval-expr (expr state)
   (funcall (repl-state-evaluator state) expr (repl-state-env state)))
 
 (defun read-with-prompt (repl-state &key (in *standard-input*) (out *standard-output*))
-  (let ((*package* (repl-state-package repl-state)))
+  (let ((*package* (repl-state-package repl-state))
+        (*readtable* (repl-state-readtable repl-state)))
     (format out "~%~A" (repl-state-prompt repl-state))
     (force-output out)
     (read in)))
@@ -126,7 +187,7 @@
        (with-open-file (in pathname :direction :input)
          (loop for (to-run inputp) = (multiple-value-list (read-one-form state in pathname))
                while inputp do (handle-expr repl to-run state))
-           ;; This is a hack. Pretend this was not a command, and replace the input with expression from file.
+         ;; This is a hack. Pretend this was not a command, and replace the input with expression from file.
          (values state nil t))))
     (:clear
      (let ((new-state (copy-repl-state state)))
@@ -137,6 +198,7 @@
 
 (defun read-form (state)
   (let* ((*package* (repl-state-package state))
+         (*readtable* (repl-state-readtable state))
          (form (read (repl-state-in state) nil 'eof)))
     ;; NOTE: 'LURK.TOOLING.REPL::EOF is not in *PACKAGE*.
     (if (eq form 'eof)
@@ -156,6 +218,7 @@
 
 (defun read-one-form (state in pathname)
   (let* ((*package* (repl-state-package state))
+         (*readtable* (repl-state-readtable state))
          (form (read in nil 'eof)))
     (cond
       ((eq form 'eof) (values nil nil))

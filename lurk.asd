@@ -3,7 +3,7 @@
   :version "0.0.1"
   :author "porcuquine <porcuquine@gmail.com>"
   :licence "MIT"
-  :depends-on ("defstar" "fiveam")
+  :depends-on ("defstar" "fiveam" "unix-opts")
   :components ((:module "base"
                         :serial t
                         :components

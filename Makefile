@@ -15,7 +15,7 @@ repl : image
 
 # Like repl but with REPL of type :IMPL instead of :API.
 repli : image
-	@bin/repl --type impl
+	@bin/repl --type=impl
 
 # Run repl after loading Lurk.
 # Slower startup than replx afer image is dumped, but faster for one-off runs.
@@ -24,4 +24,4 @@ replx :
 
 # Like replx but with REPL of type :IMPL instead of :API.
 replxi :
-	@bin/replx --type impl
+	@bin/replx --type=impl

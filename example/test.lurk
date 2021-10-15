@@ -1,4 +1,6 @@
-(square 8)
+!(:assert-eq (square 8) 64)
 
-(square 9)
+!(:assert-eq (square 9) 81)
+
+!(:assert (eq (square 10) 100))
 

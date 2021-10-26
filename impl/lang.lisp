@@ -111,8 +111,7 @@
 (defstruct fn arg body closed-env)
 
 (defclass continuation ()
-  (;(value :initarg :value :accessor continuation-value :type expression)
-   (continuation :initarg :continuation :reader continuation :type continuation)))
+  ((continuation :initarg :continuation :reader continuation :type continuation)))
 
 (defclass thunk ()
   ((value :initarg :value :reader thunk-value :type expression)
@@ -721,7 +720,7 @@ This will yield the following environment:
                         (disp var val)
                         (let ((expanded (if (hnull rest-bindings)
                                             body1
-                                            (expression<- `(let ,rest-bindings
+                                            (expression<- `(let* ,rest-bindings
                                                              ,body1)))))
                           (values val env (make-instance 'let*-continuation
                                                          :var var
@@ -852,7 +851,7 @@ This will yield the following environment:
   (:method ((cont terminal-continuation) (result t) (new-env t))
     (error "TERMINAL-CONTINUATION should never be invoked."))
   (:method ((cont outermost-continuation) (result t) (new-env t))
-    (values (continuation-value cont) new-env (make-instance 'terminal-continuation)))
+    (values result new-env (make-instance 'terminal-continuation)))
   (:method ((cont dummy-continuation) (result t) (new-env t))
     (error "DUMMY-CONTINUATION should never be invoked."))
   (:method ((cont call-continuation) (result t) (new-env t))
@@ -1222,7 +1221,7 @@ This will yield the following environment:
     (let ((limit 50)
           (a (num 1)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let ((a ,a))
+          (outer-evaluate (expression<- `(let* ((a ,a))
                                            a))
                           (empty-sym-env)
                           :limit limit)
@@ -1237,7 +1236,7 @@ This will yield the following environment:
           (a (num 1))
           (b (num 2)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let (   )
+          (outer-evaluate (expression<- `(let* (   )
                                            (cons ,a ,b)))
                           (empty-sym-env)
                           :limit limit)
@@ -1253,7 +1252,7 @@ This will yield the following environment:
           (b (num 2))
           (c (num 3)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let ((a ,a)
+          (outer-evaluate (expression<- `(let* ((a ,a)
                                                (b ,b)
                                                (c ,c))
                                            ;; TOOD: Some variadic operators?
@@ -1295,7 +1294,7 @@ This will yield the following environment:
       (multiple-value-bind (result-expr new-env iterations continuation)
           ;; Compare legibility with the original version from before LET was implemented
           ;; in OUTER-EVALUATE-ARITHMETIC
-          (outer-evaluate (expression<- `(let ((x ,a))
+          (outer-evaluate (expression<- `(let* ((x ,a))
                                            x))
                           (empty-sym-env)
                           :limit limit)
@@ -1322,7 +1321,7 @@ This will yield the following environment:
       (multiple-value-bind (result-expr new-env iterations continuation)
           ;; Compare legibility with the original version from before LET was implemented
           ;; in OUTER-EVALUATE-ARITHMETIC
-          (outer-evaluate (expression<- `(let ((x ,a)
+          (outer-evaluate (expression<- `(let* ((x ,a)
                                                (y ,b)
                                                (z ,c))
                                            (* z
@@ -1351,7 +1350,7 @@ This will yield the following environment:
           (c (num 4))
           (d (num 20)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let ((x ,a)
+          (outer-evaluate (expression<- `(let* ((x ,a)
                                                (y ,b)
                                                (z ,c))
                                            (= ,d (* z
@@ -1372,17 +1371,17 @@ This will yield the following environment:
           (x (num 5))
           (y (num 6)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let ((true (lambda (a)
-                                                       (lambda (b)
-                                                         a)))
-                                               (false (lambda (a)
+          (outer-evaluate (expression<- `(let* ((true (lambda (a)
                                                         (lambda (b)
-                                                          b)))
-                                               ;; NOTE: We cannot shadow IF because it is built-in.
-                                               (if- (lambda (a)
-                                                     (lambda (c)
-                                                       (lambda (cond)
-                                                         ((cond a) c))))))
+                                                          a)))
+                                                (false (lambda (a)
+                                                         (lambda (b)
+                                                           b)))
+                                                ;; NOTE: We cannot shadow IF because it is built-in.
+                                                (if- (lambda (a)
+                                                       (lambda (c)
+                                                         (lambda (cond)
+                                                           ((cond a) c))))))
                                            (((if- ,x) ,y) true)))
                           (empty-sym-env)
                           :limit limit)
@@ -1391,7 +1390,7 @@ This will yield the following environment:
         (is (eq x result-expr))
         (is (null continuation)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let ((true (lambda (a)
+          (outer-evaluate (expression<- `(let* ((true (lambda (a)
                                                        (lambda (b)
                                                          a)))
                                                (false (lambda (a)
@@ -1415,7 +1414,7 @@ This will yield the following environment:
           (x (num 5))
           (y (num 6)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let ((true (lambda (a)
+          (outer-evaluate (expression<- `(let* ((true (lambda (a)
                                                        (lambda (b)
                                                          a)))
                                                (if- (lambda (a)
@@ -1598,7 +1597,7 @@ circuit-based evaluator.
           (base (num 5))
           (exponent (num 3)))
       (multiple-value-bind (result-expr new-env iterations continuation)
-          (outer-evaluate (expression<- `(let ((exp (lambda (base)
+          (outer-evaluate (expression<- `(let* ((exp (lambda (base)
                                                       (letrec* ((base-inner
                                                                  (lambda (exponent)
                                                                    (if (= ,zero exponent)
@@ -1765,7 +1764,7 @@ circuit-based evaluator.
   (let ((limit 30)
         (n (num 1)))
     (multiple-value-bind (result-expr new-env iterations continuation)
-        (outer-evaluate (expression<- `(let ((a 9))))
+        (outer-evaluate (expression<- `(let* ((a 9))))
                         (empty-sym-env)
                         :limit limit)
       (is (= 4 iterations))
@@ -1837,7 +1836,7 @@ circuit-based evaluator.
       (is (eq (num 123) result-expr))
       (is (null continuation)))
     (multiple-value-bind (result-expr new-env iterations continuation)
-        (outer-evaluate (expression<- `(let ((x 9) (f (lambda () (+ x 1)))) (f)))
+        (outer-evaluate (expression<- `(let* ((x 9) (f (lambda () (+ x 1)))) (f)))
                         (empty-sym-env)
                         :limit limit)
       (declare (ignore new-env))
@@ -1910,11 +1909,11 @@ circuit-based evaluator.
                                          (make-row (lambda (list)
                                                      (if (eq list nil)
                                                          nil
-                                                         (let ((cdr (cdr list)))
+                                                         (let* ((cdr (cdr list)))
                                                            (cons (cons (car list) (car cdr))
                                                                  (make-row (cdr cdr)))))))
                                          (make-tree-aux (lambda (list)
-                                                          (let ((row (make-row list)))
+                                                          (let* ((row (make-row list)))
                                                             (if (eq (cdr row) nil)
                                                                 row
                                                                 (make-tree-aux row)))))

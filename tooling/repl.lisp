@@ -92,6 +92,7 @@
   (declare (ignore args))
   (multiple-value-bind (opts free-args)
       (opts:get-opts)
+    (declare (ignore free-args))
     (let* ((type-arg (getf opts :type))
            (type (if type-arg
                      (intern (string-upcase type-arg) :keyword)
@@ -142,7 +143,8 @@
        (declare (ignore bang))
        (handle-meta-form repl state meta-form)))
     (t (let ((result-values (multiple-value-list (eval-expr input state))))
-         (format-result-values repl state result-values)))))
+         (format-result-values repl state result-values)
+         (values state result-values nil)))))
 
 (defun handle-meta-form (repl state form)
   (typecase form
@@ -151,11 +153,19 @@
          form
      (case head
        (:assert
-        (assert (not (eq (repl-nil repl) (eval-expr (car rest) state)))))
+        (assert (not (eq (repl-nil repl) (eval-expr (car rest) state))))
+        state
+        )
        (:assert-eq
-        (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state))))
-       (t (format (repl-state-out repl) "Unhandled: ~S" head)))))
-    (t (format (repl-state-out repl) "Unhandled: ~S" form))))
+        (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state)))
+        state)
+       (:load
+        (let ((new-state (load-lib state (car rest))))
+          new-state))
+       (t (format (repl-state-out state) "Unhandled: ~S" head)
+        state))))
+    (t (format (repl-state-out state) "Unhandled: ~S" form)
+     state)))
 
 (defun eval-expr (expr state)
   (funcall (repl-state-evaluator state) expr (repl-state-env state)))
@@ -183,10 +193,14 @@
             (new-state (load-lib state pathname)))
        (values new-state input t)))
     (:run
-     (let ((pathname (read-form state)))
+     (let* ((pathname (pathname (read-form state)))
+            (pathname (if *load-truename*
+                          (merge-pathnames pathname *load-truename*)
+                          pathname))
+            (*load-truename* (truename pathname)))
        (with-open-file (in pathname :direction :input)
          (loop for (to-run inputp) = (multiple-value-list (read-one-form state in pathname))
-               while inputp do (handle-expr repl to-run state))
+               while inputp do (setf state (handle-expr repl to-run state)))
          ;; This is a hack. Pretend this was not a command, and replace the input with expression from file.
          (values state nil t))))
     (:clear
@@ -206,7 +220,12 @@
         (values form t))))
 
 (defun load-lib (state pathname)
-  (let* ((to-load (read-from-file state pathname))
+  (let* ((pathname (pathname pathname))
+         (pathname (if *load-truename*
+                       (merge-pathnames pathname *load-truename*)
+                       pathname))
+         (*load-truename* (truename pathname))
+         (to-load (read-from-file state pathname))
          (new-env (eval-expr to-load state))
          (new-state (copy-repl-state state)))
     (setf (repl-state-env new-state) new-env)

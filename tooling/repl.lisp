@@ -73,40 +73,55 @@
   (intern (string-upcase string) :keyword))
 
 (opts:define-opts
-    (:name :help
-           :description "print this help text"
-           :short #\h
-           :long "help")
-    (:name :nb
-           :description "here we want a number argument"
-           :short #\n
-           :long "nb"
-           :arg-parser #'parse-integer) ;; <- takes an argument
-    (:name :type
-           :description "REPL type"
-           :short #\t
-           :long "type"
-           :arg-parser #'keywordize))
+  (:name :help
+   :description "print this help text"
+   :short #\h
+   :long "help")
+  (:name :nb
+   :description "here we want a number argument"
+   :short #\n
+   :long "nb"
+   :arg-parser #'parse-integer) ;; <- takes an argument
+  (:name :type
+   :description "REPL type"
+   :short #\t
+   :long "type"
+   :arg-parser #'keywordize)
+  (:name :run
+   :description "Lurk file to run"
+   :short #\r
+   :long "run"
+   :arg-parser #'pathname))
 
 (defun run-repl (&rest args)
   (declare (ignore args))
   (multiple-value-bind (opts free-args)
       (opts:get-opts)
-    (declare (ignore free-args))
+    (macros:display opts free-args)
     (let* ((type-arg (getf opts :type))
            (type (if type-arg
                      (intern (string-upcase type-arg) :keyword)
-                     *repl-type*)))
-      (repl :cli t :type type))))
+                     *repl-type*))
+           (to-run (mapcar #'pathname free-args)))
+      (cond
+        (to-run
+         (multiple-value-bind (repl state)
+             (make-repl-and-state :type type)
+           (dolist (run-pathname to-run)
+             (macros:display run-pathname)
+             (setf state (run repl state run-pathname)))))
+        (t
+         (macros:display type)
+         (repl :cli t :type type))))))
+
 
 (defun* make-repl ((type keyword))
   (ecase type
     (:api (make-instance 'api-repl))
     (:impl (make-instance 'impl-repl))))
 
-
-(defun repl (&key (in *standard-input*) (out *standard-output*) (field-order *default-field-order*) (prompt nil prompt-p)
-               cli (type *repl-type*))
+(defun make-repl-and-state (&key (type *repl-type*) (prompt nil prompt-p) (field-order *default-field-order*) (in *standard-input*)
+                                 (out *standard-output*) &allow-other-keys)
   (let* ((repl (make-repl type))
          (package (repl-package repl))
          (readtable (make-repl-readtable))
@@ -119,6 +134,12 @@
                                  :in in
                                  :out out
                                  :readtable readtable)))
+    (values repl state)))
+
+(defun repl (&rest keys &key (in *standard-input*) (out *standard-output*) (field-order *default-field-order*) (prompt nil prompt-p)
+                          cli (type *repl-type*))
+  (multiple-value-bind (repl state)
+      (apply #'make-repl-and-state keys)
     (format out "Lurk REPL [~A].~%:help for help.~%" (identifier repl))
     (loop while state do
       (handler-case (let* ((*package* (repl-state-package state))
@@ -154,8 +175,7 @@
      (case head
        (:assert
         (assert (not (eq (repl-nil repl) (eval-expr (car rest) state))))
-        state
-        )
+        state)
        (:assert-eq
         (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state)))
         state)
@@ -193,22 +213,23 @@
             (new-state (load-lib state pathname)))
        (values new-state input t)))
     (:run
-     (let* ((pathname (pathname (read-form state)))
-            (pathname (if *load-truename*
-                          (merge-pathnames pathname *load-truename*)
-                          pathname))
-            (*load-truename* (truename pathname)))
-       (with-open-file (in pathname :direction :input)
-         (loop for (to-run inputp) = (multiple-value-list (read-one-form state in pathname))
-               while inputp do (setf state (handle-expr repl to-run state)))
-         ;; This is a hack. Pretend this was not a command, and replace the input with expression from file.
-         (values state nil t))))
+     (run repl state (read-form state)))
     (:clear
      (let ((new-state (copy-repl-state state)))
        (setf (repl-state-env new-state) (api-impl:empty-env))
        (values new-state input t)))
     (t (values state input nil))))
 
+(defun run (repl state pathname)
+  (let* ((pathname (if *load-truename*
+                       (merge-pathnames pathname *load-truename*)
+                       pathname))
+         (*load-truename* (truename pathname)))
+    (with-open-file (in pathname :direction :input)
+      (loop for (to-run inputp) = (multiple-value-list (read-one-form state in pathname))
+            while inputp do (setf state (handle-expr repl to-run state)))
+      ;; This is a hack. Pretend this was not a command, and replace the input with expression from file.
+      (values state nil t))))
 
 (defun read-form (state)
   (let* ((*package* (repl-state-package state))

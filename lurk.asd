@@ -3,7 +3,7 @@
   :version "0.0.1"
   :author "porcuquine <porcuquine@gmail.com>"
   :licence "MIT"
-  :depends-on ("defstar" "fiveam")
+  :depends-on ("defstar" "fiveam" "unix-opts")
   :components ((:module "base"
                         :serial t
                         :components
@@ -26,7 +26,8 @@
                         :serial t
                         :components
                         ((:file "package")
-                         (:file "repl"))))
+                         (:file "repl")
+                         (:file "example"))))
   :in-order-to ((test-op (load-op "lurk")))
   :perform (test-op (o c)
 		    (flet ((run-suite (suite) (symbol-call :fiveam :run! suite)))

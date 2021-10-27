@@ -86,12 +86,7 @@
    :description "REPL type"
    :short #\t
    :long "type"
-   :arg-parser #'keywordize)
-  (:name :run
-   :description "Lurk file to run"
-   :short #\r
-   :long "run"
-   :arg-parser #'pathname))
+   :arg-parser #'keywordize))
 
 (defun run-repl (&rest args)
   (declare (ignore args))

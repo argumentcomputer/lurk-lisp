@@ -77,11 +77,6 @@
    :description "print this help text"
    :short #\h
    :long "help")
-  (:name :nb
-   :description "here we want a number argument"
-   :short #\n
-   :long "nb"
-   :arg-parser #'parse-integer) ;; <- takes an argument
   (:name :type
    :description "REPL type"
    :short #\t

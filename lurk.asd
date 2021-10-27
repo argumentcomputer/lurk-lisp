@@ -26,7 +26,8 @@
                         :serial t
                         :components
                         ((:file "package")
-                         (:file "repl"))))
+                         (:file "repl")
+                         (:file "example"))))
   :in-order-to ((test-op (load-op "lurk")))
   :perform (test-op (o c)
 		    (flet ((run-suite (suite) (symbol-call :fiveam :run! suite)))

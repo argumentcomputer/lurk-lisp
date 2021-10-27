@@ -4,5 +4,5 @@
 
 !(:assert-eq (square 9) 81)
 
-!(:assert (eq (square 10) 101))
+!(:assert (eq (square 10) 100))
 

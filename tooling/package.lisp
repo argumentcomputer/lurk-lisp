@@ -19,3 +19,7 @@
 (defpackage lurk.impl-user
   (:nicknames :liu)
   (:use :lurk.tooling.repl :lurk.lang))
+
+(defpackage lurk.example
+  (:use :common-lisp)
+  (:import-from :it.bese.FiveAm #:def-suite #:def-suite* #:in-suite #:test #:is #:run! #:signals #:finishes #:skip))

@@ -97,7 +97,6 @@
   (declare (ignore args))
   (multiple-value-bind (opts free-args)
       (opts:get-opts)
-    (macros:display opts free-args)
     (let* ((type-arg (getf opts :type))
            (type (if type-arg
                      (intern (string-upcase type-arg) :keyword)
@@ -108,10 +107,9 @@
          (multiple-value-bind (repl state)
              (make-repl-and-state :type type)
            (dolist (run-pathname to-run)
-             (macros:display run-pathname)
-             (setf state (run repl state run-pathname)))))
+             (setf state (run repl state run-pathname)))
+           (sb-ext:exit :code 0)))
         (t
-         (macros:display type)
          (repl :cli t :type type))))))
 
 
@@ -152,7 +150,7 @@
         (error (e) (format (repl-state-out state) "ERROR: ~A" e))
         (condition (c) (format (repl-state-out state) "~A" c))))
     (when cli
-      (sb-ext:exit))))
+      (sb-ext:exit :code 0))))
 
 (deftype meta-form () '(cons (eql !) t))
 

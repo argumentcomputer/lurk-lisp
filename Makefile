@@ -11,17 +11,17 @@ test : always
 # Run repl after dumping image if needed.
 # Faster startup than replx, except when dumping a new image.
 repl : image
-	@bin/repl
+	@bin/lurk
 
 # Like repl but with REPL of type :IMPL instead of :API.
 repli : image
-	@bin/repl --type=impl
+	@bin/lurk --type=impl
 
 # Run repl after loading Lurk.
 # Slower startup than replx afer image is dumped, but faster for one-off runs.
 replx :
-	@bin/replx
+	@bin/lurkx
 
 # Like replx but with REPL of type :IMPL instead of :API.
 replxi :
-	@bin/replx --type=impl
+	@bin/lurkx --type=impl

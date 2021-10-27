@@ -167,6 +167,10 @@
        (:assert-eq
         (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state)))
         state)
+       (:clear
+        (let ((new-state (copy-repl-state state)))
+          (setf (repl-state-env new-state) (api-impl:empty-env))
+          new-state))
        (:load
         (let ((new-state (load-lib state (car rest))))
           new-state))

@@ -389,12 +389,11 @@
 
 (defun* (extend-rec-aux -> (recursive-env t t)) ((env (env t t)) (var t) (val t))
   (etypecase env
-    ((recursive-env t t) (push (cl:cons var val) (car env)))
+    ((recursive-env t t) (cl:cons (push (cl:cons var val) (car env)) (cdr env)))
     ((env t t) (cl:cons (list (cl:cons var val)) env))))
 
 (defun* extend-rec-aux2 ((env hlist) (var sym) (val expression))
   (let-cons ((binding-or-env rest) env)
-    (declare (ignore rest))
     (let-cons ((var-or-binding val-or-more-bindings) binding-or-env)
       (declare (ignore val-or-more-bindings))
       (etypecase var-or-binding
@@ -403,7 +402,8 @@
 
         (hcons
          ;; It's a binding, so we are extending a recursive env.
-         (hlist (cons (cons var val) binding-or-env)))))))
+         (cons (cons (cons var val) binding-or-env) rest)
+         )))))
 
 (defclass tail-continuation-mixin () ())
 
@@ -1988,11 +1988,28 @@ circuit-based evaluator.
         (is (eq (num 33) result-expr))
         (is (null continuation))))))
 
+(test dont-discard-rest-env
+  (with-fresh-stores
+    (let ((limit 100))
+      (multiple-value-bind (result-expr new-env iterations continuation)
+        (outer-evaluate (expression<- `(let* ((z 9))
+                                         (letrec* ((a 1)
+                                                   (b 2)
+                                                   (l (lambda (x) (+ z x))))
+                                                  (l 9))))
+                        (empty-sym-env)
+                        :limit limit)
+        (declare (ignore new-env))
+        (is (eq (num 18) result-expr))
+        (is (= 29 iterations))
+        (is (null continuation))
+        ))))
+
 (test let-restore-saved-env
   (with-fresh-stores
     (let ((limit 100))
       (signals simple-error
-        (outer-evaluate (expression<- '(+ (let ((a 1)) a) a))
+        (outer-evaluate (expression<- '(+ (let* ((a 1)) a) a))
                         (empty-sym-env)
                         :limit limit)))))
 
@@ -2000,7 +2017,7 @@ circuit-based evaluator.
   (with-fresh-stores
     (let ((limit 100))
       (signals simple-error
-        (outer-evaluate (expression<- '(+ (let ((a 1) (a 2)) a) a))
+        (outer-evaluate (expression<- '(+ (let* ((a 1) (a 2)) a) a))
                         (empty-sym-env)
                         :limit limit)))))
 
@@ -2016,7 +2033,7 @@ circuit-based evaluator.
   (with-fresh-stores
     (let ((limit 100))
       (signals simple-error
-        (outer-evaluate (expression<- '(+ (let ((a 1))
+        (outer-evaluate (expression<- '(+ (let* ((a 1))
                                             a)
                                         a))
                         (empty-sym-env)
@@ -2026,15 +2043,15 @@ circuit-based evaluator.
   (with-fresh-stores
     (let ((limit 100))
       (signals simple-error
-        (outer-evaluate (expression<- `(let ((outer (letrec*
-                                                     ((x 888)
-                                                      (f (lambda (x)
-                                                           (if (= x 2)
-                                                               123
-                                                               (f (+ x 1))))))
-                                                     f)))
+        (outer-evaluate (expression<- `(let* ((outer (letrec*
+                                                      ((x 888)
+                                                       (f (lambda (x)
+                                                            (if (= x 2)
+                                                                123
+                                                                (f (+ x 1))))))
+                                                      f)))
                                          ;; This should be an error. X should not be bound here.
-                                        (+ (outer 0) x)))
+                                         (+ (outer 0) x)))
                         (empty-sym-env)
                         :limit limit)))))
 
@@ -2042,12 +2059,12 @@ circuit-based evaluator.
   (with-fresh-stores
     (let ((limit 10000))
       (signals simple-error
-        (outer-evaluate (expression<- `(let ((outer (let
-                                                     ((f (lambda (x)
-                                                           (+ (let ((a 9)) a) x))))
-                                                      f)))
+        (outer-evaluate (expression<- `(let* ((outer (let*
+                                                         ((f (lambda (x)
+                                                               (+ (let* ((a 9)) a) x))))
+                                                       f)))
                                          ;; This should be an error. X should not be bound here.
-                                        (+ (outer 1) x)))
+                                         (+ (outer 1) x)))
                         (empty-sym-env)
                         :limit limit)))))
 
@@ -2241,3 +2258,4 @@ circuit-based evaluator.
       (is (eq x y))
       (is (eq x z))
       (is (eq z (canonicalize z *content-store*))))))
+

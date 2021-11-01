@@ -196,6 +196,24 @@
                         ;; However, it exercises the behavior of LETREC*.
                         (odd 1)))
 
+;; outer-evaluate-no-mutual-recursion
+!(:assert-error (letrec* ((even (lambda (n)
+                                  (if (= 0 n)
+                                      t
+                                      (odd (- n 1)))))
+                          (odd (lambda (n)
+                                 (even (- n 1)))))
+                         ;; NOTE: This is not true mutual-recursion.
+                         ;; However, it exercises the behavior of LETREC*.
+                         (odd 2)))
+
+;; outer-evaluate-let-scope
+
+!(:assert-error (let ((closure (lambda (x)
+                                 ;; This use of CLOSURE is unbound.
+                                 closure)))
+                  (closure 1)))
+
 ;; outer-evaluate-let-no-body
 !(:assert-eq nil (let* ((a 9))))
 
@@ -313,3 +331,35 @@
                             (b 2)
                             (l (lambda (x) (+ z x))))
                            (l 9))))
+
+;; let-restore-saved-env
+!(:assert-error (+ (let* ((a 1)) a) a))
+
+;; let-restore-saved-env2
+!(:assert-error (+ (let* ((a 1) (a 2)) a) a))
+
+;; letrec*-restore-saved-env
+!(:assert-error (+ (letrec* ((a 1)(a 2)) a) a))
+
+;; lookup-restore-saved-env
+!(:assert-error (+ (let* ((a 1))
+                     a)
+                   a))
+
+;; tail-call-restore-saved-env
+!(:assert-error (let* ((outer (letrec*
+                               ((x 888)
+                                (f (lambda (x)
+                                     (if (= x 2)
+                                         123
+                                         (f (+ x 1))))))
+                               f)))
+                  ;; This should be an error. X should not be bound here.
+                  (+ (outer 0) x)))
+
+;; binop-restore-saved-env
+!(:assert-error (let* ((outer (let* ((f (lambda (x)
+                                          (+ (let* ((a 9)) a) x))))
+                                f)))
+                  ;; This should be an error. X should not be bound here.
+                  (+ (outer 1) x)))

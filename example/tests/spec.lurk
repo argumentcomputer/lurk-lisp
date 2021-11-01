@@ -1,0 +1,315 @@
+;; outer-evaluate
+!(:assert-eq 99 ((lambda (x) x) 99))
+
+;; outer-evaluate2
+!(:assert-eq 99 ((lambda (y)
+                   ((lambda (x) y) 888))
+                 99))
+
+;; outer-evaluate3
+!(:assert-eq 999 ((lambda (y)
+                    ((lambda (x)
+                       ((lambda (z) z)
+                        x))
+                     y))
+                  999))
+
+;; outer-evaluate4
+!(:assert-eq 888 ((lambda (y)
+                    ((lambda (x)
+                       ((lambda (z) z)
+                        x))
+                     ;; NOTE: We pass a different value here.
+                     888))
+                  999))
+
+;; outer-evaluate5
+!(:assert-eq 999 (((lambda (fn)
+                     (lambda (x) (fn x)))
+                   (lambda (y) y))
+                  999))
+
+;; outer-evaluate-sum
+!(:assert-eq 9 (+ 2 (+ 3 4)))
+
+;; outer-evaluate-diff
+!(:assert-eq 4 (- 9 5))
+
+;; outer-evaluate-product
+!(:assert-eq 45 (* 9 5))
+
+;; outer-evaluate-quotient
+!(:assert-eq 3 (/ 21 7))
+
+;; outer-evaluate-num-equal 1
+!(:assert-eq t (= 5 5))
+
+;; outer-evaluate-num-equal 2
+!(:assert-eq nil (= 5 6))
+
+;; outer-evaluate-adder
+!(:assert-eq 5 (((lambda (x)
+                   (lambda (y)
+                     (+ x y)))
+                 2)
+                3))
+
+;; outer-evaluate-let-simple
+!(:assert-eq 1 (let* ((a 1))
+                 a))
+
+;; outer-evaluate-let-bug
+!(:assert-eq (cons 1 2) (let* () (cons 1 2)))
+
+;; outer-evaluate-let
+!(:assert-eq 6 (let* ((a 1)
+                      (b 2)
+                      (c 3))
+                 (+ a (+ b c))))
+
+;; outer-evaluate-arithmetic
+!(:assert-eq 20 ((((lambda (x)
+                     (lambda (y)
+                       (lambda (z)
+                         (* z
+                            (+ x y)))))
+                   2)
+                  3)
+                 4))
+
+;; NOTE: I think this test has drifted and is defunct.
+;; It's equivalent to outer-evaluate-let-simple.
+;; outer-evaluate-arithmetic-simplest
+!(:assert-eq 2 (let* ((x 2)) x))
+
+;; outer-evaluate-arithmetic-let
+!(:assert-eq 20 (let* ((x 2)
+                       (y 3)
+                       (z 4))
+                  (* z (+ x y))))
+
+;; outer-evaluate-arithmetic-comparison
+!(:assert-eq t (let* ((x 2)
+                      (y 3)
+                      (z 4))
+                 (= 20 (* z
+                          (+ x y)))))
+
+;; outer-evaluate-fundamental-conditional 1
+!(:assert-eq 5 (let* ((true (lambda (a)
+                              (lambda (b)
+                                a)))
+                      (false (lambda (a)
+                               (lambda (b)
+                                 b)))
+                      ;; NOTE: We cannot shadow IF because it is built-in.
+                      (if- (lambda (a)
+                             (lambda (c)
+                               (lambda (cond)
+                                 ((cond a) c))))))
+                 (((if- 5) 6) true)))
+
+;; outer-evaluate-fundamental-conditional 2
+!(:assert-eq 6 (let* ((true (lambda (a)
+                              (lambda (b)
+                                a)))
+                      (false (lambda (a)
+                               (lambda (b)
+                                 b)))
+                      ;; NOTE: We cannot shadow IF because it is built-in.
+                      (if- (lambda (a)
+                             (lambda (c)
+                               (lambda (cond)
+                                 ((cond a) c))))))
+                 (((if- 5) 6) false)))
+
+;; outer-evaluate-fundamental-conditional-bug
+!(:assert-eq 5 (let* ((true (lambda (a)
+                              (lambda (b)
+                                a)))
+                      ;; NOTE: We cannot shadow IF because it is built-in.
+                      (if- (lambda (a)
+                             (lambda (c)
+                               (lambda (cond)
+                                 ((cond a) c))))))
+                 (((if- 5) 6) true)))
+
+;; outer-evaluate-if
+!(:assert-eq 6 (if nil 5 6))
+
+;; outer-evaluate-fully-evaluates
+!(:assert-eq 10 (if t (+ 5 5) 6))
+
+;; outer-evaluate-recursion
+!(:assert-eq 125 (letrec* ((exp (lambda (base)
+                                  (lambda (exponent)
+                                    (if (= 0 exponent)
+                                        1
+                                        (* base ((exp base) (- exponent 1))))))))
+                          ((exp 5) 3)))
+
+;; outer-evaluate-recursion-multiarg
+!(:assert-eq 125 (letrec* ((exp (lambda (base exponent)
+                                  (if (= 0 exponent)
+                                      1
+                                      (* base (exp base (- exponent 1)))))))
+                          (exp 5 3)))
+
+;; outer-evaluate-recursion-optimized
+!(:assert-eq 125 (let* ((exp (lambda (base)
+                               (letrec* ((base-inner
+                                          (lambda (exponent)
+                                            (if (= 0 exponent)
+                                                1
+                                                (* base (base-inner (- exponent 1)))))))
+                                        base-inner))))
+                   ((exp 5) 3)))
+
+;; outer-evaluate-tail-recursion
+!(:assert-eq 125 (letrec* ((exp (lambda (base)
+                                  (lambda (exponent-remaining)
+                                    (lambda (acc)
+                                      (if (= 0 exponent-remaining)
+                                          acc
+                                          (((exp base) (- exponent-remaining 1)) (* acc base))))))))
+                          (((exp 5) 3) 1)))
+
+;; outer-evaluate-tail-recursion-somewhat-optimized
+!(:assert-eq 125 (letrec* ((exp (lambda (base)
+                                  (letrec* ((base-inner
+                                             (lambda (exponent-remaining)
+                                               (lambda (acc)
+                                                 (if (= 0 exponent-remaining)
+                                                     acc
+                                                     ((base-inner (- exponent-remaining 1)) (* acc base)))))))
+                                           base-inner))))
+                          (((exp 5) 3) 1)))
+
+;; outer-evaluate-no-mutual-recursion
+!(:assert-eq t (letrec* ((even (lambda (n)
+                                 (if (= 0 n)
+                                     t
+                                     (odd (- n 1)))))
+                         (odd (lambda (n)
+                                (even (- n 1)))))
+                        ;; NOTE: This is not true mutual-recursion.
+                        ;; However, it exercises the behavior of LETREC*.
+                        (odd 1)))
+
+;; outer-evaluate-let-no-body
+!(:assert-eq nil (let* ((a 9))))
+
+;; outer-evaluate-cons 1
+!(:assert-eq 1 (car (cons 1 2)))
+
+;; outer-evaluate-cons 2
+!(:assert-eq 2 (cdr (cons 1 2)))
+
+;; outer-evaluate-cons-in-function 1
+!(:assert-eq 2 (((lambda (a)
+                   (lambda (b)
+                     (car (cons a b))))
+                 2)
+                3))
+
+;; outer-evaluate-cons-in-function 2
+!(:assert-eq 3 (((lambda (a)
+                   (lambda (b)
+                     (cdr (cons a b))))
+                 2)
+                3))
+
+;; multiarg-eval-bug
+!(:assert-eq 2 (car (cdr '(1 2 3 4))))
+
+;; outer-evaluate-zero-arg-lambda 1
+!(:assert-eq 123 ((lambda () 123)))
+
+;; outer-evaluate-zero-arg-lambda 2
+!(:assert-eq 10 (let* ((x 9) (f (lambda () (+ x 1)))) (f)))
+
+;; minimal-tail-call
+!(:assert-eq 123 (letrec*
+                  ((f (lambda (x)
+                        (if (= x 140)
+                            123
+                            (f (+ x 1))))))
+                  (f 0)))
+
+;; multiple-letrec*-bindings
+!(:assert-eq 123 (letrec*
+                  ((x 888)
+                   (f (lambda (x)
+                        (if (= x 5)
+                            123
+                            (f (+ x 1))))))
+                  (f 0)))
+
+;; tail-call2
+!(:assert-eq 123 (letrec*
+                  ((f (lambda (x)
+                        (if (= x 5)
+                            123
+                            (f (+ x 1)))))
+                   (g (lambda (x) (f x))))
+                  (g 0)))
+
+;; outer-evaluate-make-tree
+!(:assert-eq '(((h . g) . (f . e)) . ((d . c) . (b . a)))
+             (letrec* ((mapcar (lambda (f list)
+                                 (if (eq list nil)
+                                     nil
+                                     (cons (f (car list)) (mapcar f (cdr list))))))
+                       (make-row (lambda (list)
+                                   (if (eq list nil)
+                                       nil
+                                       (let* ((cdr (cdr list)))
+                                         (cons (cons (car list) (car cdr))
+                                               (make-row (cdr cdr)))))))
+                       (make-tree-aux (lambda (list)
+                                        (let* ((row (make-row list)))
+                                          (if (eq (cdr row) nil)
+                                              row
+                                              (make-tree-aux row)))))
+                       (make-tree (lambda (list)
+                                    (car (make-tree-aux list))))
+                       (reverse-tree (lambda (tree)
+                                       (if (atom tree)
+                                           tree
+                                           (cons (reverse-tree (cdr tree))
+                                                 (reverse-tree (car tree)))))))
+                      (reverse-tree
+                       (make-tree '(a b c d e f g h)))))
+
+;; outer-evaluate-multiple-letrecstar-bindings
+!(:assert-eq 13 (letrec* ((double (lambda (x) (* 2 x)))
+                          (square (lambda (x) (* x x))))
+                         (+ (square 3) (double 2))))
+
+;; outer-evaluate-multiple-letrecstar-bindings-referencing
+!(:assert-eq 11 (letrec* ((double (lambda (x) (* 2 x)))
+                          (double-inc (lambda (x) (+ 1 (double x)))))
+                         (+ (double 3) (double-inc 2))))
+
+;; outer-evaluate-multiple-letrecstar-bindings-recursive
+!(:assert-eq 33 (letrec* ((exp (lambda (base exponent)
+                                 (if (= 0 exponent)
+                                     1
+                                     (* base (exp base (- exponent 1))))))
+                          (exp2 (lambda (base exponent)
+                                  (if (= 0 exponent)
+                                      1
+                                      (* base (exp2 base (- exponent 1))))))
+                          (exp3 (lambda (base exponent)
+                                  (if (= 0 exponent)
+                                      1
+                                      (* base (exp3 base (- exponent 1)))))))
+                         (+ (+ (exp 3 2) (exp2 2 3))
+                            (exp3 4 2))))
+
+;; dont-discard-rest-env
+!(:assert-eq 18 (let* ((z 9))
+                  (letrec* ((a 1)
+                            (b 2)
+                            (l (lambda (x) (+ z x))))
+                           (l 9))))

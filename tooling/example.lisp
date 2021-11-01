@@ -5,7 +5,8 @@
 (defparameter *example-tests* (list "test.lurk"
                                     "micro-tests.lurk"
                                     "meta-tests.lurk"
-                                    "meta-letrec-tests.lurk"))
+                                    "meta-letrec-tests.lurk"
+                                    "tests/spec.lurk"))
 
 (defparameter *repl-types-to-test* '(:api
                                      ;; FIXME: Uncomment when :impl tests are passing.
@@ -13,6 +14,20 @@
                                      ))
 
 (defparameter *project-dir* nil)
+
+(defun test-example-file (pathname)
+  (dolist (type *repl-types-to-test*)
+    (let ((out (make-string-output-stream)))
+      (multiple-value-bind (repl state)
+          (repl:make-repl-and-state :type type :out out)
+        (is (not (null
+                  (handler-case
+                      ;; Return T if Lurk file is run successfully.
+                      (prog1 t
+                        (repl:run repl state pathname))
+                    ;; Return NIL if an error is signaled while running.
+                    (error () nil))))
+            "~A" (get-output-stream-string out))))))
 
 (test examples-internally
   (let* ((root-dir (or *project-dir* (uiop/os:getcwd)))

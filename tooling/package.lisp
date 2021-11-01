@@ -10,7 +10,7 @@
                 #:-> #:labels*)
   (:import-from :lurk.macros #:display #:symbolconc #:awhen #:it)
   (:shadow atom)
-  (:export #:repl #:load-lib #:clear-libs))
+  (:export #:repl #:load-lib #:clear-libs #:make-repl-and-state #:run))
 
 (defpackage lurk.api-user
   (:nicknames :lau)
@@ -22,4 +22,5 @@
 
 (defpackage lurk.example
   (:use :common-lisp)
+  (:local-nicknames (#:repl #:lurk.tooling.repl))
   (:import-from :it.bese.FiveAm #:def-suite #:def-suite* #:in-suite #:test #:is #:run! #:signals #:finishes #:skip))

@@ -167,6 +167,10 @@
        (:assert-eq
         (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state)))
         state)
+       (:assert-error
+        (assert (handler-case (prog1 nil (eval-expr (first rest) state))
+                  (error () t)))
+        state)
        (:clear
         (let ((new-state (copy-repl-state state)))
           (setf (repl-state-env new-state) (api-impl:empty-env))

@@ -1,6 +1,8 @@
 (in-package lurk.api.impl)
 (def-suite* api-impl-suite :in lurk:master-suite)
 
+(defconstant api:t 'api:t)
+
 (defstruct closure env function)
 
 (defun* (extend-closure -> closure) ((c closure) (rec-env env))
@@ -84,10 +86,10 @@
            ((eql api:atom)
             (destructuring-bind (x) rest
               (typecase (eval-expr x env)
-                (atom (values t env))
-                (t (values nil env)))))
+                (atom (values api:t env))
+                (t (values api:nil env)))))
            ((eql api:let*)
-            (destructuring-bind (bindings body-expr) rest
+            (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
                 (loop for (var val) in bindings
                       ;; Evaluate VAL in NEW-ENV
@@ -145,8 +147,8 @@
                                (api:* (mod (* evaled-a evaled-b) p))
                                (api:/ (assert (not (zerop evaled-b)) (evaled-b) "Cannot divide ~S by 0." evaled-a)
                                 (mod (* evaled-a (inverse evaled-b p)) p))
-                               (api:= (= evaled-a evaled-b))
-                               (api:eq (eq evaled-a evaled-b))
+                               (api:= (if (= evaled-a evaled-b) api:t api:nil))
+                               (api:eq (if (eq evaled-a evaled-b) api:t api:nil))
                                (api:cons (hcons evaled-a evaled-b)))))
                 (values result env))))
            (t
@@ -242,8 +244,8 @@
         (signals error (evaluate 'b env2))
         (signals error (evaluate 'a env3)))
 
-      (is (eql t (evaluate '(api:atom 8) empty-env)))
-      (is (eql t (evaluate '(api:atom 'a) empty-env)))
+      (is (eql api:t (evaluate '(api:atom 8) empty-env)))
+      (is (eql api:t (evaluate '(api:atom 'a) empty-env)))
       (is (eql nil (evaluate '(api:atom '(1 2 3)) empty-env)))
 
       (signals error (evaluate 'x empty-env))
@@ -278,13 +280,13 @@
       (is (eql 18 (evaluate '(api:/ 306 17) empty-env)))
       (signals error (evaluate '(api:/ 99 0) empty-env))
 
-      (is (eql t (evaluate '(api:= 5 (api:+ 3 2)) empty-env)))
+      (is (eql api:t (evaluate '(api:= 5 (api:+ 3 2)) empty-env)))
       (is (eql nil (evaluate '(api:= 6 (api:+ 3 2)) empty-env)))
 
-      (is (eql t (evaluate '(api:eq 2 (api:+ 1 1)) empty-env)))
+      (is (eql api:t (evaluate '(api:eq 2 (api:+ 1 1)) empty-env)))
       (is (eql nil (evaluate '(api:eq 3 (api:+ 1 1)) empty-env)))
 
-      (is (eql t (evaluate '(api:eq (api:cons 1 2) (api:cons 1 2)) empty-env)))
+      (is (eql api:t (evaluate '(api:eq (api:cons 1 2) (api:cons 1 2)) empty-env)))
       (is (eql nil (evaluate '(api:eq (api:cons 1 2) (api:cons 2 3)) empty-env)))
       (signals error (evaluate '(api:= (api:cons 1 2) (api:cons 1 2)) empty-env))
 
@@ -298,7 +300,7 @@
       (is (eql 'x (evaluate ''x empty-env)))
 
       ;; This test will fail without QUOTE-EXPR.
-      (is (eql t (evaluate '(api:eq (api:cons 'a 'b) '(a . b)) empty-env)))
+      (is (eql api:t (evaluate '(api:eq (api:cons 'a 'b) '(a . b)) empty-env)))
 
       ;; Keep and uncomment when LIST is supported.
       ;; (is (equal '(1 2 3) (evaluate '(api:list 1 2 3) empty-env)))

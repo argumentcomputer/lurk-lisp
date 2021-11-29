@@ -42,7 +42,7 @@
 
 (deftype env () 'list)
 
-(deftype built-in-unary () '(member api:car api:cdr api:quote))
+(deftype built-in-unary () '(member api:atom api:car api:cdr api:quote))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
@@ -83,11 +83,6 @@
        (destructuring-bind (head &rest rest) expr
          (etypecase head
            (closure (apply-closure head env rest))
-           ((eql api:atom)
-            (destructuring-bind (x) rest
-              (typecase (eval-expr x env)
-                (atom (values api:t env))
-                (t (values api:nil env)))))
            ((eql api:let*)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
@@ -133,6 +128,10 @@
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head
+                              (api:atom
+                               (typecase (eval-expr arg env)
+                                 (atom (values api:t env))
+                                 (t (values api:nil env))))
                               (api:car (car (eval-expr arg env)))
                               (api:cdr (cdr (eval-expr arg env)))
                               (api:quote (quote-expr arg)))))

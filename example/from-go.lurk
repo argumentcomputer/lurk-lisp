@@ -1,0 +1,19 @@
+;; func Foo(a int, b int) int {
+;;   x := a * b + 4
+;;   for i := 0; i < b; i++ {
+;;     x += a
+;;     a += b * 2
+;;   }
+;;   return x
+;; }
+
+(let* ((foo (lambda (a b)
+              (letrec* ((aux (lambda (i a x)
+                               (if (= i b)
+                                     x
+                                     (let* ((x (+ x a))
+                                            (a (+ a (* b 2))))
+                                       (aux (+ i 1) a x))))))
+                       (let* ((x (+ (* a b) 4)))
+                         (aux 0 a x))))))
+  (current-env))

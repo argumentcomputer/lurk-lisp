@@ -49,6 +49,19 @@ QuickLisp needs to find the project, so add a symlink:
 > cd ~/quicklisp/local-projects
 > ln -s ~/<installdir>/lurk/lurk.asd lurk.asd
 ```
+# Submodules
+
+Lurk source files used in tests are in the [lurk-lib](https://github.com/lurk-lang/lurk-lib) submodule. You must
+initialize and update submodules before test will pass.
+
+```bash
+> git submodule init
+Submodule 'lurk-lib' (git@github.com:lurk-lang/lurk-lib.git) registered for path 'lurk-lib'
+> git submodule update
+Cloning into '<installation-path>/lurk-lang/lurk/lurk-lib'...
+Submodule path 'lurk-lib': checked out '<lurk-lib-head-commit>'
+```
+
 # Test
 
 Running tests should show output similar to the following.
@@ -75,46 +88,58 @@ T
 
 Run the REPL with `make repl`.
 
-The example below shows loading [a library](example/lib.lurk), running [code using it](example/test.lurk), then clearing so the library is unavailable.
+The example below shows loading [a library](lurk-lib/example/lib.lurk), running [code using it](lurk-lib/example/test.lurk), then clearing so the library is unavailable.
 
 ```bash
-(base) ➜  lurk git:(master) ✗ make repl
-bin/cl -Q -sp lurk -p lurk.api.tooling -E run-repl
-PACKAGE => #<PACKAGE "LURK.USER">
-
-Lurk REPL.
+➜  lurk git:(master) ✗ make repl          
+Lurk REPL [API].
 :help for help.
 
-> :help
+API> :help
 
 :HELP => Print this text.
 :QUIT => :Quit REPL.
 :ECHO <FORM> =>  Read one form and echo it.
 :LOAD <PATH> => Load a library.
 :CLEAR => Clear loaded libraries.
-:RUN <PATH> => Evaluate expression from file.
+:RUN <PATH> => Evaluate expressions from file.
 
-> :load "example/lib.lurk"
-Reading from example/lib.lurk.
+API> :load "lurk-lib/example/lib.lurk"
+Read from lurk-lib/example/lib.lurk: (LETREC*
+                                           ((SQUARE (LAMBDA (X) (* X X))))
+                                           (CURRENT-ENV))
 
-> :run "example/test.lurk"
-Reading from example/test.lurk.
-Run: (SQUARE 8)
-
+API> (square 8)
 64
-> :clear
 
-> :run "example/test.lurk"
-Reading from example/test.lurk.
-Run: (SQUARE 8)
-ERROR: Unbound var: LURK.USER::SQUARE
-> (+ 1 (* 8 8))
+API> :clear
 
-65
-> :quit
-(base) ➜  lurk git:(master) ✗ 
+API> :run "lurk-lib/example/test.lurk"
+Read from lurk-lib/example/test.lurk: (LURK.TOOLING.REPL::!
+                                            (:LOAD "lib.lurk"))
+Read from /Users/clwk/fil/lurk/lurk-lib/example/lib.lurk: (LETREC*
+                                                           ((SQUARE
+                                                             (LAMBDA (X)
+                                                              (* X X))))
+                                                           (CURRENT-ENV))
+Read from lurk-lib/example/test.lurk: (LURK.TOOLING.REPL::!
+                                       (:ASSERT-EQ (SQUARE 8) 64))
+Read from lurk-lib/example/test.lurk: (LURK.TOOLING.REPL::!
+                                       (:ASSERT-EQ (SQUARE 9) 81))
+Read from lurk-lib/example/test.lurk: (LURK.TOOLING.REPL::!
+                                       (:ASSERT (EQ (SQUARE 10) 100)))
+
+API> :quit
+
+➜  lurk git:(master) ✗ 
 ```
+# Spec
+[High-level Lurk Language Specification](spec/v0-1.md)]
 
 # Documentation
 
 TODO
+
+## License
+
+MIT or Apache 2.0

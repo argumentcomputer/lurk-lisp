@@ -1,2 +1,0 @@
-(letrec* ((square (lambda (x) (* x x))))
-  (current-env))

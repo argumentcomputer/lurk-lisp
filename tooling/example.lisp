@@ -31,7 +31,7 @@
 
 (test examples-internally
   (let* ((root-dir (or *project-dir* (uiop/os:getcwd)))
-         (example-dir (merge-pathnames "example/" root-dir)))
+         (example-dir (merge-pathnames "lurk-lib/example/" root-dir)))
     (dolist (test-file *example-tests*)
       (let ((merged (merge-pathnames test-file example-dir)))
         (dolist (type *repl-types-to-test*)

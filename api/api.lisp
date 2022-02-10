@@ -3,11 +3,11 @@
 
 (defconstant api:t 'api:t)
 
-(defstruct closure env function)
+(defstruct closure env function (macrop nil))
 
 (defun* (extend-closure -> closure) ((c closure) (rec-env env))
   (let ((extended (hcons rec-env (closure-env c))))
-    (make-closure :env extended :function (closure-function c))))
+    (make-closure :env extended :function (closure-function c) :macrop (closure-macrop c))))
 
 ;; The following types loosely specify the language which EXPR allows.
 
@@ -67,10 +67,15 @@
 (defun* (eval-expr-for-p -> (values expr env)) ((p integer) (expr expr) (env env))
   (labels ((eval-expr (expr env)
            (eval-expr-for-p p expr env))
-         (apply-closure (closure args env)
-           (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
-                  (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
-             (values (apply (closure-function closure) (closure-env closure) quoted-args) env))))
+           (apply-closure (closure args env)
+             (if (closure-macrop closure)
+                 (let* ((quoted-args (mapcar (lambda (unevaled) `(quote ,unevaled)) args))
+                        (macro-result (apply (closure-function closure) (closure-env closure) quoted-args))
+                        (result (eval-expr macro-result env)))
+                   (values result env))
+                 (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
+                        (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
+                   (values (apply (closure-function closure) (closure-env closure) quoted-args) env)))))
     (etypecase expr
       ((or closure self-evaluating-symbol) (values expr env))
       (symbol
@@ -114,6 +119,17 @@
                                                     ,',body-expr)
                                                  ,env-var))))
                 (values (make-closure :env env :function (compile nil source)) env))))
+           ((eql api:lambda-macro)
+            (destructuring-bind (args body-expr) rest
+              ;; TODO(namin): avoid dup with case above
+              (let* ((env-var (gensym "ENV"))
+                     (source `(lambda (,env-var ,@args)
+                                (eval-expr-for-p ,p
+                                                 ;; Close your eyes and believe.
+                                                 `(api:let* (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
+                                                    ,',body-expr)
+                                                 ,env-var))))
+                (values (make-closure :env env :function (compile nil source) :macrop t) env))))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               (let ((result (if (eval-expr condition env)

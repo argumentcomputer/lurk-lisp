@@ -3,6 +3,7 @@
 (def-suite* example-suite :in lurk:master-suite)
 
 (defparameter *example-tests* (list "test.lurk"
+                                    "macro-tests.lurk"
                                     "micro-tests.lurk"
                                     "meta-tests.lurk"
                                     "meta-letrec-tests.lurk"

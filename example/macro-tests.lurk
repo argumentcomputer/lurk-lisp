@@ -1,3 +1,5 @@
 !(:assert-eq 1 ((lambda-macro (x) 1) foo))
 
 !(:assert-eq 'foo ((lambda-macro (x) (cons 'quote (cons x nil))) foo))
+
+!(:assert-eq '(foo . 1) (let* ((binding (lambda-macro (x) (cons 'cons (cons (cons 'quote (cons x nil)) (cons x nil))))) (foo 1)) (binding foo)))

@@ -83,7 +83,7 @@
        (destructuring-bind (head &rest rest) expr
          (etypecase head
            (closure (apply-closure head env rest))
-           ((eql api:let*)
+           ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
                 (loop for (var val) in bindings
@@ -91,7 +91,7 @@
                       for evaled = (eval-expr val new-env)
                       do (setq new-env (extend new-env var evaled)))
                 (eval-expr body-expr new-env))))
-           ((eql api:letrec*)
+           ((eql api:letrec)
             (destructuring-bind (bindings body-expr) rest
               (let ((new-env env))
                 (loop for (var val) in bindings
@@ -110,7 +110,7 @@
                      (source `(lambda (,env-var ,@args)
                                 (eval-expr-for-p ,p
                                                  ;; Close your eyes and believe.
-                                                 `(api:let* (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
+                                                 `(api:let (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
                                                     ,',body-expr)
                                                  ,env-var))))
                 (values (make-closure :env env :function (compile nil source)) env))))
@@ -249,19 +249,19 @@
 
       (signals error (evaluate 'x empty-env))
 
-      (is (eql 123 (evaluate '(api:let* ((x 123))
+      (is (eql 123 (evaluate '(api:let ((x 123))
                                x)
                              empty-env)))
 
-      (is (eql 987 (evaluate '(api:let* ((x 123)
+      (is (eql 987 (evaluate '(api:let ((x 123)
                                         (x 987))
                                x)
                              empty-env)))
 
       ;; Bindings are sequential, not parallel within a single LET* expression.
-      (is (eql 1 (evaluate '(api:let* ((a 1)
+      (is (eql 1 (evaluate '(api:let ((a 1)
                                        (b 2))
-                             (api:let* ((b a)
+                             (api:let ((b a)
                                         (a b))
                                a))
                            empty-env)))
@@ -314,29 +314,29 @@
       (is (eql 1 (evaluate '(api:if (api:eq 3 (api:+ 1 2)) 1 2) empty-env)))
 
       (is (typep (evaluate '(api:lambda (x) (* x x)) empty-env) 'closure))
-      (is (eql 81 (evaluate '(api:let* ((f (api:lambda (x) (api:* x x)))) (f 9)) empty-env)))
+      (is (eql 81 (evaluate '(api:let ((f (api:lambda (x) (api:* x x)))) (f 9)) empty-env)))
       (is (eql 81 (evaluate '((api:lambda (x) (api:* x x)) 9) empty-env)))
-      (is (eql 9 (evaluate '(api:let* ((make-adder (api:lambda (x)
+      (is (eql 9 (evaluate '(api:let ((make-adder (api:lambda (x)
                                                     (api:lambda (y) (api:+ x y))))
                                       (adder (make-adder 1)))
                              (adder 8))
                            empty-env)))
-      (is (eql 8 (evaluate '(api:letrec* ((pow (api:lambda (base)
+      (is (eql 8 (evaluate '(api:letrec ((pow (api:lambda (base)
                                                  (api:lambda (exp)
                                                    (api:if (api:= exp 0)
                                                            1
                                                            (api:* base ((pow base) (api:- exp 1))))))))
                              ((pow 2) 3))
                            empty-env)))
-      (is (eql 8 (evaluate '(api:letrec* ((pow (api:lambda (base exp)
+      (is (eql 8 (evaluate '(api:letrec ((pow (api:lambda (base exp)
                                                  (api:if (api:= exp 0)
                                                          1
                                                          (api:* base (pow base (api:- exp 1)))))))
                              (pow 2 3))
                            empty-env)))
-      (is (eq (hlist (hcons 'b 9) (hcons 'a 8)) (evaluate '(api:let* ((a 8) (b 9)) (api:current-env)) empty-env)))
+      (is (eq (hlist (hcons 'b 9) (hcons 'a 8)) (evaluate '(api:let ((a 8) (b 9)) (api:current-env)) empty-env)))
 
-      (let ((lib-env (evaluate '(api:letrec* ((pow (api:lambda (base exp)
+      (let ((lib-env (evaluate '(api:letrec ((pow (api:lambda (base exp)
                                                      (api:if (api:= exp 0)
                                                              1
                                                              (api:* base (pow base (api:- exp 1)))))))
@@ -345,17 +345,17 @@
         (is (eql 8 (evaluate '(pow 2 3) lib-env))))
 
       ;; Regression test to ensure function arguments are evaluated only once.
-      (is (eq (hlist 1) (evaluate '(api:letrec* ((f (api:lambda (x) x)))
+      (is (eq (hlist 1) (evaluate '(api:letrec ((f (api:lambda (x) x)))
                                     (f '(1)))
                                   nil)))
 
       ;; Regression: ensure that letrec* does not forget old bindings.
-      (is (eq (hcons 1 1) (evaluate '(api:let* ((disj (api:lambda (g1 g2) (api:lambda (x) (api:cons (g1 x) (g2 x))))))
-                                      (api:letrec* ((foo (disj (api:lambda (x) x) (api:lambda (x) x))))
+      (is (eq (hcons 1 1) (evaluate '(api:let ((disj (api:lambda (g1 g2) (api:lambda (x) (api:cons (g1 x) (g2 x))))))
+                                      (api:letrec ((foo (disj (api:lambda (x) x) (api:lambda (x) x))))
                                        (foo 1)))
                                     nil)))
 
-      (signals error (evaluate '(api:letrec* ((a (api:lambda (x) (b x))) (b (api:lambda (x) (api:* x x)))) (a 9)) empty-env))
+      (signals error (evaluate '(api:letrec ((a (api:lambda (x) (b x))) (b (api:lambda (x) (api:* x x)))) (a 9)) empty-env))
       )))
 
 

@@ -10,7 +10,7 @@
 
 (defparameter *repl-types-to-test* '(:api
                                      ;; FIXME: Uncomment when :impl tests are passing.
-                                     ;; :impl
+                                     ;;:impl
                                      ))
 
 (defparameter *project-dir* nil)

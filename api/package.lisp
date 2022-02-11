@@ -5,7 +5,7 @@
   (:use :common-lisp)
   ;; QUOTE and NIL are not shadowed, to ease list syntax handling.
   (:shadow #:atom #:car #:cdr #:cons #:eq #:if #:lambda #:t #:+ #:- #:* #:/ #:=)
-  (:export #:atom #:car #:cdr #:cons #:current-env #:eq #:if #:lambda #:let* #:letrec* #:nil #:quote #:t #:+ #:- #:* #:/ #:=))
+  (:export #:atom #:car #:cdr #:cons #:current-env #:eq #:if #:lambda #:let #:letrec #:nil #:quote #:t #:+ #:- #:* #:/ #:=))
 
 (defpackage lurk.api.impl
   (:nicknames :api.impl)

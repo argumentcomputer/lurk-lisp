@@ -1,8 +1,0 @@
-!(:load "lib.lurk")
-
-!(:assert-eq (square 8) 64)
-
-!(:assert-eq (square 9) 81)
-
-!(:assert (eq (square 10) 100))
-

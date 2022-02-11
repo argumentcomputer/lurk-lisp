@@ -3,3 +3,10 @@
 !(:assert-eq 'foo ((lambda-macro (x) (cons 'quote (cons x nil))) foo))
 
 !(:assert-eq '(foo . 1) (let* ((binding (lambda-macro (x) (cons 'cons (cons (cons 'quote (cons x nil)) (cons x nil))))) (foo 1)) (binding foo)))
+
+!(:assert-eq '(baz . 3)
+             (let* ((nullp (lambda (x) (if x nil t))))
+               (let* ((binding (lambda-macro (x) (cons 'cons (cons (cons 'quote (cons x nil)) (cons x nil))))))
+                 (letrec* ((last-binding (lambda-macro (xs) (if (nullp (cdr xs)) (cons 'binding (cons (car xs) nil)) (cons 'last-binding (cons (cdr xs) nil))))))
+                   (let* ((foo 1) (bar 2) (baz 3))
+                     (last-binding (foo bar baz)))))))

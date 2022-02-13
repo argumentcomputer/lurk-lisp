@@ -1,0 +1,14 @@
+(letrec*
+    ((quasi (lambda-macro
+             (exp)
+             (if (atom exp)
+                 (cons 'quote (cons exp nil))
+                 (if (eq 'uq (car exp))
+                     (car (cdr exp))
+                     (cons 'cons
+                           (cons (cons 'quasi (cons (car exp) nil))
+                                 (cons
+                                  (cons 'quasi (cons (cdr exp) nil))
+                                  nil))))))))
+  (current-env)
+  )

@@ -3,3 +3,7 @@
 !(:assert-eq '(foo 1) (let ((foo 1)) (quasi (foo (uq foo)))))
 
 !(:assert-eq '(foo (1 2 3)) (let ((foo 1)) (quasi (foo (1 2 (uq (+ 1 2)))))))
+
+!(:assert-eq '(foo 1) (let ((foo 1)) `(foo ,foo)))
+
+!(:assert-eq '(foo (1 2 3)) (let ((foo 1)) `(foo (1 2 ,(+ 1 2)))))

@@ -16,9 +16,19 @@
   (declare (ignore char))
   (list '! (read stream t nil t)))
 
+(defun backquote-reader (stream char)
+  (declare (ignore char))
+  (list 'quasi (read stream t nil t)))
+
+(defun comma-reader (stream char)
+  (declare (ignore char))
+  (list 'uq (read stream t nil t)))
+
 (defun make-repl-readtable ()
   (let ((*readtable* (copy-readtable nil)))
     (set-macro-character #\! #'bang-reader)
+    (set-macro-character #\` #'backquote-reader)
+    (set-macro-character #\, #'comma-reader)
     *readtable*))
 
 (defgeneric* repl-package ((repl repl))

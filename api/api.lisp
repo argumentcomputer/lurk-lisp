@@ -42,7 +42,7 @@
 
 (deftype env () 'list)
 
-(deftype ram () 'list) ;; 'env?
+(defstruct ram defs macros)
 
 (deftype built-in-unary () '(member api:atom api:car api:cdr api:quote))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
@@ -77,7 +77,7 @@
       ((or closure self-evaluating-symbol) (values expr env ram))
       (symbol
        (multiple-value-bind (v found-p)
-           (lookup-find expr ram)
+           (lookup-find expr (ram-defs ram))
          (values
           (if found-p
               v
@@ -93,7 +93,7 @@
            ((eql api:define)
             (destructuring-bind (var rhs) rest
               (let ((val (eval-expr rhs env)))
-                (values 'defined env (extend ram var val)))))
+                (values 'defined env (extend-ram-defs ram var val)))))
            ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
@@ -218,7 +218,13 @@
                       (lookup-find var (cdr env))))))))
 
 (defun* (empty-env -> env) ())
-(defun* (empty-ram -> ram) ())
+(defun* (empty-ram -> ram) () (make-ram :defs (empty-env) :macros (empty-env)))
+
+(defun* extend-ram-defs ((ram ram) (var expr) (val expr))
+  (make-ram :defs (extend (ram-defs ram) var val) :macros (ram-macros ram)))
+
+(defun* extend-ram-macros ((ram ram) (var expr) (val expr))
+  (make-ram :defs (ram-defs ram) :macros (extend (ram-macros ram) var val)))
 
 (defun* extend ((env env) (var expr) (val expr))
   (check-type var symbol)

@@ -72,7 +72,7 @@
            (lookup-find expr (ram-macros ram))
          found-p)))
 
-(defun* (macro-expand-for-p -> expr) ((p integer) (expr expr) (ram ram))
+(defun* (macro-expand-macro -> expr) ((expr expr) (ram ram))
   (let ((closure (lookup (car expr) (ram-macros ram))))
     (etypecase closure
       (closure (let* ((args (cdr expr))
@@ -80,13 +80,55 @@
                       (result (apply (closure-function closure) ram (closure-env closure) quoted-args)))
                  result)))))
 
+(defun* (macro-expand-for-p -> expr) ((p integer) (expr expr) (ram ram))
+  (labels ((macro-expand (expr)
+             (macro-expand-for-p p expr ram))
+           (is-macro (expr)
+             (is-macro-in-ram expr ram)))
+    (etypecase expr
+      ((or closure self-evaluating-symbol) expr)
+      (symbol expr)
+      (atom (unless (typep expr `(atom ,p))
+              (error "~S is out of range [0, ~S)." expr p))
+       expr)
+      (list
+       (destructuring-bind (head &rest rest) expr
+         (etypecase head
+           ((eql api:define)
+            (destructuring-bind (var rhs) rest
+              `(api:define ,var ,(macro-expand rhs))))
+           ((eql api:defmacro)
+            expr)
+           ((eql api:let)
+            (destructuring-bind (bindings &optional body-expr) rest
+              `(api:let ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+           ((eql api:letrec)
+            (destructuring-bind (bindings &optional body-expr) rest
+              `(api:letrec ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+           ((eql api:lambda)
+            (destructuring-bind (args body-expr) rest
+              `(api:lambda ,args ,(macro-expand body-expr))
+              ))
+           ((eql api:if)
+            (destructuring-bind (condition a b) rest
+              `(api:if ,(macro-expand condition) ,(macro-expand a) ,(macro-expand b))))
+           ((eql api:current-env) expr)
+           (built-in-unary
+            (destructuring-bind (arg) rest
+              (case head
+                (api:quote expr)
+                (t `(,head ,(macro-expand arg))))))
+           (built-in-binary
+            (destructuring-bind (a b) rest
+              `(,head ,(macro-expand a) ,(macro-expand b))))
+           (t
+            (if (is-macro head)
+                (macro-expand (macro-expand-macro expr ram))
+                (mapcar #'macro-expand expr)))))))))
+
 (defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (labels ((eval-expr (expr env)
              (eval-expr-for-p p expr env ram))
-           (is-macro (expr)
-             (is-macro-in-ram expr ram))
-           (macro-expand (expr)
-             (macro-expand-for-p p expr ram))
            (apply-closure (closure args env)
              (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
                     (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
@@ -192,13 +234,11 @@
                                (api:cons (hcons evaled-a evaled-b)))))
                 (values result env ram))))
            (t
-            (if (is-macro head)
-                (eval-expr (macro-expand expr) env)
-                ;; (fn . args)
-                ;; First evaluate FN, then substitue result in new expression to evaluate.
-                (let ((evaled (eval-expr head env)))
-                  (etypecase evaled
-                    (closure (apply-closure evaled rest env))))))))))))
+            ;; (fn . args)
+            ;; First evaluate FN, then substitue result in new expression to evaluate.
+            (let ((evaled (eval-expr head env)))
+              (etypecase evaled
+                (closure (apply-closure evaled rest env)))))))))))
 
 ;; TODO: Make the cons store an explicit argument here and of CONS.
 ;; Returns a value EQUAL to EXPR, but with all CONS subexpressions
@@ -210,7 +250,7 @@
 
 (defun* (make-evaluator -> function) ((p (integer 0)))
   (lambda (expr env ram)
-    (eval-expr-for-p p expr env ram)))
+    (eval-expr-for-p p (macro-expand-for-p p expr ram) env ram)))
 
 (defun* (lookup -> (values expr boolean)) ((var symbol) (env env))
   (multiple-value-bind (result found-p)

@@ -6,7 +6,7 @@
 (defparameter *default-field-order* lurk.api.impl:*default-p*)
 (defparameter *repl-type* :api)
 
-(defstruct repl-state package env evaluator field-order prompt in out readtable)
+(defstruct repl-state package env ram evaluator field-order prompt in out readtable)
 
 (defclass repl () ())
 (defclass api-repl (repl) ())
@@ -35,6 +35,12 @@
   (:method ((repl api-repl)) nil)
   (:method ((repl impl-repl)) (lurk.lang::sym nil)))
 
+(defgeneric* empty-ram ((repl repl))
+  (:method ((repl api-repl))
+    (api-impl:empty-ram))
+  (:method ((repl impl-repl))
+    ;; TODO(namin): dead.
+    (api-impl:empty-ram)))
 
 (defgeneric* empty-env ((repl repl))
   (:method ((repl api-repl))
@@ -116,6 +122,7 @@
          (prompt (if prompt-p prompt (format nil "~A~A" (identifier repl) *prompt*)))
          (state (make-repl-state :package package
                                  :env (empty-env repl)
+                                 :ram (empty-ram repl)
                                  :evaluator (make-evaluator repl field-order)
                                  :field-order field-order
                                  :prompt prompt
@@ -136,7 +143,7 @@
                           (maybe-handle-repl-command repl state input)
                         (cond
                           (command-p (setq state new-state))
-                          (t (handle-expr repl input state)))))
+                          (t (setq state (handle-expr repl input state))))))
         (error (e) (format (repl-state-out state) "ERROR: ~A" e))
         (condition (c) (format (repl-state-out state) "~A" c))))
     (when cli
@@ -153,7 +160,9 @@
        (handle-meta-form repl state meta-form)))
     (t (let ((result-values (multiple-value-list (eval-expr input state))))
          (format-result-values repl state result-values)
-         (values state result-values nil)))))
+         (let ((new-state (copy-repl-state state)))
+           (setf (repl-state-ram new-state) (third result-values))
+           (values new-state result-values nil))))))
 
 (defun handle-meta-form (repl state form)
   (typecase form
@@ -184,7 +193,7 @@
      state)))
 
 (defun eval-expr (expr state)
-  (funcall (repl-state-evaluator state) expr (repl-state-env state)))
+  (funcall (repl-state-evaluator state) expr (repl-state-env state) (repl-state-ram state)))
 
 (defun read-with-prompt (repl-state &key (in *standard-input*) (out *standard-output*))
   (let ((*package* (repl-state-package repl-state))
@@ -241,12 +250,18 @@
          (pathname (if *load-truename*
                        (merge-pathnames pathname *load-truename*)
                        pathname))
-         (*load-truename* (truename pathname))
-         (to-load (read-from-file state pathname))
-         (new-env (eval-expr to-load state))
-         (new-state (copy-repl-state state)))
-    (setf (repl-state-env new-state) new-env)
-    new-state))
+         (*load-truename* (truename pathname)))
+    (with-open-file (in pathname :direction :input)
+      (loop for (to-load inputp) = (multiple-value-list (read-one-form state in pathname))
+            while inputp do
+              (let ((new-state (copy-repl-state state)))
+                (multiple-value-bind  (new-env dummy-env new-ram)
+                    (eval-expr to-load state)
+                  (if (eq new-ram (repl-state-ram state))
+                      (setf (repl-state-env new-state) new-env)
+                      (setf (repl-state-ram new-state) new-ram))
+                  (setq state new-state))))))
+  state)
 
 (defun read-from-file (state pathname)
   (with-open-file (in pathname :direction :input)

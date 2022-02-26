@@ -42,6 +42,8 @@
 
 (deftype env () 'list)
 
+(deftype ram () 'list) ;; 'env?
+
 (deftype built-in-unary () '(member api:atom api:car api:cdr api:quote))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
@@ -64,25 +66,34 @@
 (defun* (hlist -> list) (&rest exprs)
   (hlist* exprs))
 
-(defun* (eval-expr-for-p -> (values expr env)) ((p integer) (expr expr) (env env))
+(defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (labels ((eval-expr (expr env)
-           (eval-expr-for-p p expr env))
+           (eval-expr-for-p p expr env ram))
          (apply-closure (closure args env)
            (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
                   (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
-             (values (apply (closure-function closure) (closure-env closure) quoted-args) env))))
+             (values (apply (closure-function closure) ram (closure-env closure) quoted-args) env ram))))
     (etypecase expr
-      ((or closure self-evaluating-symbol) (values expr env))
+      ((or closure self-evaluating-symbol) (values expr env ram))
       (symbol
-       (values (lookup expr env) env))
+       (multiple-value-bind (v found-p)
+           (lookup-find expr ram)
+         (values
+          (if found-p
+              v
+              (lookup expr env))
+          env ram)))
       (atom (unless (typep expr `(atom ,p))
               (error "~S is out of range [0, ~S)." expr p))
-       (values expr env))
+       (values expr env ram))
 
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
-           (closure (apply-closure head env rest))
+           ((eql api:define)
+            (destructuring-bind (var rhs) rest
+              (let ((val (eval-expr rhs env)))
+                (values 'defined env (extend ram var val)))))
            ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
@@ -107,35 +118,38 @@
               ;; confusing possibility of wastefully including some ignored
               ;; first expressions in the body.
               (let* ((env-var (gensym "ENV"))
-                     (source `(lambda (,env-var ,@args)
+                     (ram-var (gensym "RAM"))
+                     (source `(lambda (,ram-var ,env-var ,@args)
                                 (eval-expr-for-p ,p
                                                  ;; Close your eyes and believe.
                                                  `(api:let (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
                                                     ,',body-expr)
-                                                 ,env-var))))
-                (values (make-closure :env env :function (compile nil source)) env))))
+                                                 ,env-var
+                                                 ,ram-var))))
+                (values (make-closure :env env :function (compile nil source)) env ram))))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               (let ((result (if (eval-expr condition env)
                                 (eval-expr a env)
                                 (eval-expr b env))))
-                (values result env))))
+                (values result env ram))))
            #+(or) ;; Disabled initially, since variadic functions aren't simple in other implementations.
            ((eql api:list)
             (values (hlist* (mapcar (lambda (x) (eval-expr x env)) rest))
-                    env))
-           ((eql api:current-env) (values env env))
+                    env
+                    ram))
+           ((eql api:current-env) (values env env ram))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head
                               (api:atom
                                (typecase (eval-expr arg env)
-                                 (atom (values api:t env))
-                                 (t (values api:nil env))))
+                                 (atom api:t)
+                                 (t api:nil)))
                               (api:car (car (eval-expr arg env)))
                               (api:cdr (cdr (eval-expr arg env)))
                               (api:quote (quote-expr arg)))))
-                (values result env))))
+                (values result env ram))))
            (built-in-binary
             (destructuring-bind (a b) rest
               (let* ((evaled-a (eval-expr a env))
@@ -149,7 +163,7 @@
                                (api:= (if (= evaled-a evaled-b) api:t api:nil))
                                (api:eq (if (eq evaled-a evaled-b) api:t api:nil))
                                (api:cons (hcons evaled-a evaled-b)))))
-                (values result env))))
+                (values result env ram))))
            (t
             ;; (fn . args)
             ;; First evaluate FN, then substitue result in new expression to evaluate.
@@ -166,8 +180,8 @@
     (t expr)))
 
 (defun* (make-evaluator -> function) ((p (integer 0)))
-  (lambda (expr env)
-    (eval-expr-for-p p expr env)))
+  (lambda (expr env ram)
+    (eval-expr-for-p p expr env ram)))
 
 (defun* (lookup -> (values expr boolean)) ((var symbol) (env env))
   (multiple-value-bind (result found-p)
@@ -204,6 +218,7 @@
                       (lookup-find var (cdr env))))))))
 
 (defun* (empty-env -> env) ())
+(defun* (empty-ram -> ram) ())
 
 (defun* extend ((env env) (var expr) (val expr))
   (check-type var symbol)
@@ -224,9 +239,10 @@
 (test eval-expr-for-p
   (let* ((p 1009)
          (evaluator (make-evaluator 1009))
-         (empty-env (empty-env)))
+         (empty-env (empty-env))
+         (ram (empty-ram)))
     (flet ((evaluate (expr env)
-             (funcall evaluator expr env)))
+             (funcall evaluator expr env ram)))
       (is (eql 1 (evaluate 1 empty-env)))
       (signals error (evaluate (1+ p) empty-env))
       (signals error (evaluate p empty-env))
@@ -366,9 +382,9 @@
 (defparameter *default-p* #x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001 
   "Order of BLS12-381's scalar field. (Default *for now*.)")
 
-(defun eval (expr env)
+(defun eval (expr env ram)
   "Convenience function to evaluate without specifying field order."
-  (eval-expr-for-p *default-p* expr env))
+  (eval-expr-for-p *default-p* expr env ram))
 
 ;; Using Extended Euclidean Algorithm
 ;; https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Modular_integers

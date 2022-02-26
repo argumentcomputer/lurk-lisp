@@ -1,0 +1,13 @@
+(define foo (lambda (x y) (cons x y)))
+
+(define bar 2)
+
+!(:assert-eq '(2 . 2) (foo 2 bar))
+
+(define baz (lambda (x) 1))
+
+!(:assert-eq 1 (baz bar))
+
+!(:load "ram-lib.lurk")
+
+!(:assert-eq 3 (+ x1 x2))

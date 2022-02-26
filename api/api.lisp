@@ -82,7 +82,6 @@
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
-           (closure (apply-closure head env rest))
            ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))

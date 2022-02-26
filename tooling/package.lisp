@@ -10,7 +10,7 @@
                 #:-> #:labels*)
   (:import-from :lurk.macros #:display #:symbolconc #:awhen #:it)
   (:shadow atom)
-  (:export #:repl #:load-lib #:clear-libs #:make-repl-and-state #:run))
+  (:export #:repl #:load-lib #:clear-libs #:make-repl-and-state #:run #:quasi #:uq))
 
 (defpackage lurk.api-user
   (:nicknames :lau)

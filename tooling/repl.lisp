@@ -6,7 +6,7 @@
 (defparameter *default-field-order* lurk.api.impl:*default-p*)
 (defparameter *repl-type* :api)
 
-(defstruct repl-state package env evaluator field-order prompt in out readtable)
+(defstruct repl-state subset package env ram evaluator field-order prompt in out readtable)
 
 (defclass repl () ())
 (defclass api-repl (repl) ())
@@ -16,9 +16,30 @@
   (declare (ignore char))
   (list '! (read stream t nil t)))
 
-(defun make-repl-readtable ()
+;; TODO: It's a little sketchy that we read using these symbols but don't define the corresponding macros. We will
+;; eventually need to include some set of built-in macros as part of the minimal default RAM. The quasiquote macros
+;; should be in the required set, given that these built-in reader macros depend on them.
+(defun backquote-reader (stream char)
+  (declare (ignore char))
+  (list 'lurk.api.ram:quasi (read stream t nil t)))
+
+(defun comma-reader (stream char)
+  (declare (ignore char))
+  (list 'lurk.api.ram:uq (read stream t nil t)))
+
+(defgeneric enhance-readtable-for-subset (subset)
+  (:method ((subset api.impl:subset)) (progn))
+  (:method ((subset api.impl:ram-subset))
+    (set-macro-character #\` #'backquote-reader)
+    (set-macro-character #\, #'comma-reader))
+  (:method :after ((subset api.impl:subset))
+    (dolist (contained (api.impl:directly-contains subset))
+      (enhance-readtable-for-subset contained))))
+
+(defun make-subset-readtable (subset)
   (let ((*readtable* (copy-readtable nil)))
     (set-macro-character #\! #'bang-reader)
+    (enhance-readtable-for-subset subset)
     *readtable*))
 
 (defgeneric* repl-package ((repl repl))
@@ -35,6 +56,12 @@
   (:method ((repl api-repl)) nil)
   (:method ((repl impl-repl)) (lurk.lang::sym nil)))
 
+(defgeneric* empty-ram ((repl repl))
+  (:method ((repl api-repl))
+    (api-impl:empty-ram))
+  (:method ((repl impl-repl))
+    ;; TODO(namin): dead.
+    (api-impl:empty-ram)))
 
 (defgeneric* empty-env ((repl repl))
   (:method ((repl api-repl))
@@ -72,16 +99,29 @@
 (defun keywordize (string)
   (intern (string-upcase string) :keyword))
 
+(defun subsetize (string)
+  (case (keywordize string)
+    (:min (api.impl:intern-subset 'api.impl:min-subset))
+    (:core (api.impl:intern-subset 'api.impl:core-subset))
+    (:ram (api.impl:intern-subset 'api.impl:ram-subset))))
+
 (opts:define-opts
   (:name :help
    :description "print this help text"
    :short #\h
    :long "help")
   (:name :type
-   :description "REPL type"
+   :description "REPL type (api, impl)"
    :short #\t
    :long "type"
-   :arg-parser #'keywordize))
+   :arg-parser #'keywordize)
+  (:name :subset
+   :description "Lurk Subset (min, core, ram)"
+   :short #\t
+   :long "subset"
+   :arg-parser #'subsetize))
+
+(defparameter *default-subset* (api.impl:intern-subset 'api-impl:core-subset))
 
 (defun run-repl (&rest args)
   (declare (ignore args))
@@ -91,31 +131,35 @@
            (type (if type-arg
                      (intern (string-upcase type-arg) :keyword)
                      *repl-type*))
+           (subset-arg (getf opts :subset))
+           (subset (or subset-arg *default-subset*))
            (to-run (mapcar #'pathname free-args)))
       (cond
         (to-run
          (multiple-value-bind (repl state)
-             (make-repl-and-state :type type)
+             (make-repl-and-state :type type :subset subset)
            (dolist (run-pathname to-run)
              (setf state (run repl state run-pathname)))
            (sb-ext:exit :code 0)))
         (t
-         (repl :cli t :type type))))))
-
+         (repl :cli t :type type :subset subset))))))
 
 (defun* make-repl ((type keyword))
   (ecase type
     (:api (make-instance 'api-repl))
     (:impl (make-instance 'impl-repl))))
 
-(defun make-repl-and-state (&key (type *repl-type*) (prompt nil prompt-p) (field-order *default-field-order*) (in *standard-input*)
+
+(defun make-repl-and-state (&key (subset *default-subset*) (type *repl-type*) (prompt nil prompt-p) (field-order *default-field-order*) (in *standard-input*)
                                  (out *standard-output*) &allow-other-keys)
   (let* ((repl (make-repl type))
-         (package (repl-package repl))
-         (readtable (make-repl-readtable))
+         (package (api.impl:subset-package subset))
+         (readtable (make-subset-readtable subset))
          (prompt (if prompt-p prompt (format nil "~A~A" (identifier repl) *prompt*)))
-         (state (make-repl-state :package package
+         (state (make-repl-state :subset subset
+                                 :package package
                                  :env (empty-env repl)
+                                 :ram (empty-ram repl)
                                  :evaluator (make-evaluator repl field-order)
                                  :field-order field-order
                                  :prompt prompt
@@ -125,7 +169,7 @@
     (values repl state)))
 
 (defun repl (&rest keys &key (in *standard-input*) (out *standard-output*) (field-order *default-field-order*) (prompt nil prompt-p)
-                          cli (type *repl-type*))
+                          cli (type *repl-type*) (subset (api.impl:intern-subset *default-subset-type*)))
   (multiple-value-bind (repl state)
       (apply #'make-repl-and-state keys)
     (format out "Lurk REPL [~A].~%:help for help.~%" (identifier repl))
@@ -136,7 +180,7 @@
                           (maybe-handle-repl-command repl state input)
                         (cond
                           (command-p (setq state new-state))
-                          (t (handle-expr repl input state)))))
+                          (t (setq state (handle-expr repl input state))))))
         (error (e) (format (repl-state-out state) "ERROR: ~A" e))
         (condition (c) (format (repl-state-out state) "~A" c))))
     (when cli
@@ -151,9 +195,12 @@
          input
        (declare (ignore bang))
        (handle-meta-form repl state meta-form)))
-    (t (let ((result-values (multiple-value-list (eval-expr input state))))
+    (t
+     (let ((result-values (multiple-value-list (eval-expr input state))))
          (format-result-values repl state result-values)
-         (values state result-values nil)))))
+         (let ((new-state (copy-repl-state state)))
+           (setf (repl-state-ram new-state) (third result-values))
+           (values new-state result-values nil))))))
 
 (defun handle-meta-form (repl state form)
   (typecase form
@@ -184,7 +231,7 @@
      state)))
 
 (defun eval-expr (expr state)
-  (funcall (repl-state-evaluator state) expr (repl-state-env state)))
+  (funcall (repl-state-evaluator state) expr (repl-state-env state) (repl-state-ram state)))
 
 (defun read-with-prompt (repl-state &key (in *standard-input*) (out *standard-output*))
   (let ((*package* (repl-state-package repl-state))
@@ -241,12 +288,18 @@
          (pathname (if *load-truename*
                        (merge-pathnames pathname *load-truename*)
                        pathname))
-         (*load-truename* (truename pathname))
-         (to-load (read-from-file state pathname))
-         (new-env (eval-expr to-load state))
-         (new-state (copy-repl-state state)))
-    (setf (repl-state-env new-state) new-env)
-    new-state))
+         (*load-truename* (truename pathname)))
+    (with-open-file (in pathname :direction :input)
+      (loop for (to-load inputp) = (multiple-value-list (read-one-form state in pathname))
+            while inputp do
+              (let ((new-state (copy-repl-state state)))
+                (multiple-value-bind  (new-env dummy-env new-ram)
+                    (eval-expr to-load state)
+                  (if (eq new-ram (repl-state-ram state))
+                      (setf (repl-state-env new-state) new-env)
+                      (setf (repl-state-ram new-state) new-ram))
+                  (setq state new-state))))))
+  state)
 
 (defun read-from-file (state pathname)
   (with-open-file (in pathname :direction :input)

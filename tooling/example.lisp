@@ -7,6 +7,7 @@
                                     "meta-tests.lurk"
                                     "meta-letrec-tests.lurk"
                                     "../../example/ram-tests.lurk"
+                                    "../../example/macro-tests.lurk"
                                     "tests/spec.lurk"))
 
 (defparameter *repl-types-to-test* '(:api

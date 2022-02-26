@@ -1,0 +1,21 @@
+(define n1 1)
+(define l1 (cons 2 (cons 1 nil)))
+
+(defmacro (foo x) x)
+
+!(:assert-eq 1 (foo 1))
+!(:assert-eq 2 (foo 2))
+!(:assert-eq 1 (foo n1))
+!(:assert-eq '(2 1) (foo l1))
+
+(defmacro (bar x) (cons '+ (cons x (cons x nil))))
+
+!(:assert-eq 2 (bar 1))
+!(:assert-eq 4 (bar 2))
+
+(defmacro (baz x) (if (atom x) x (if (atom (cdr x)) (car x) (cons 'baz (cons (cdr x) nil)))))
+
+!(:assert-eq 1 (baz 1))
+!(:assert-eq 1 (baz n1))
+!(:assert-eq '(2 1) (baz l1))
+!(:assert-eq 1 (baz (2 1)))

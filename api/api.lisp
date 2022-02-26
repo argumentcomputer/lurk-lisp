@@ -66,13 +66,31 @@
 (defun* (hlist -> list) (&rest exprs)
   (hlist* exprs))
 
+(defun* (is-macro-in-ram -> boolean) ((expr expr) (ram ram))
+  (and (symbolp expr)
+       (multiple-value-bind (result found-p)
+           (lookup-find expr (ram-macros ram))
+         found-p)))
+
+(defun* (macro-expand-for-p -> expr) ((p integer) (expr expr) (ram ram))
+  (let ((closure (lookup (car expr) (ram-macros ram))))
+    (etypecase closure
+      (closure (let* ((args (cdr expr))
+                      (quoted-args (mapcar (lambda (unevaled) `(quote ,unevaled)) args))
+                      (result (apply (closure-function closure) ram (closure-env closure) quoted-args)))
+                 result)))))
+
 (defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (labels ((eval-expr (expr env)
-           (eval-expr-for-p p expr env ram))
-         (apply-closure (closure args env)
-           (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
-                  (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
-             (values (apply (closure-function closure) ram (closure-env closure) quoted-args) env ram))))
+             (eval-expr-for-p p expr env ram))
+           (is-macro (expr)
+             (is-macro-in-ram expr ram))
+           (macro-expand (expr)
+             (macro-expand-for-p p expr ram))
+           (apply-closure (closure args env)
+             (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
+                    (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
+               (values (apply (closure-function closure) ram (closure-env closure) quoted-args) env ram))))
     (etypecase expr
       ((or closure self-evaluating-symbol) (values expr env ram))
       (symbol
@@ -94,6 +112,15 @@
             (destructuring-bind (var rhs) rest
               (let ((val (eval-expr rhs env)))
                 (values 'defined env (extend-ram-defs ram var val)))))
+           ((eql api:defmacro)
+            ;; (defmacro (name param...) body...))
+            (let* ((sig (car rest))
+                   (body (cdr rest))
+                   (var (car sig))
+                   (params (cdr sig))
+                   (rhs `(api:lambda ,params ,@body)))
+              (let ((val (eval-expr rhs env)))
+                (values 'defined env (extend-ram-macros ram var val)))))
            ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
@@ -165,11 +192,13 @@
                                (api:cons (hcons evaled-a evaled-b)))))
                 (values result env ram))))
            (t
-            ;; (fn . args)
-            ;; First evaluate FN, then substitue result in new expression to evaluate.
-            (let ((evaled (eval-expr head env)))
-              (etypecase evaled
-                (closure (apply-closure evaled rest env)))))))))))
+            (if (is-macro head)
+                (eval-expr (macro-expand expr) env)
+                ;; (fn . args)
+                ;; First evaluate FN, then substitue result in new expression to evaluate.
+                (let ((evaled (eval-expr head env)))
+                  (etypecase evaled
+                    (closure (apply-closure evaled rest env))))))))))))
 
 ;; TODO: Make the cons store an explicit argument here and of CONS.
 ;; Returns a value EQUAL to EXPR, but with all CONS subexpressions

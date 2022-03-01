@@ -16,13 +16,16 @@
   (declare (ignore char))
   (list '! (read stream t nil t)))
 
+;; TODO: It's a little sketchy that we read using these symbols but don't define the corresponding macros. We will
+;; eventually need to include some set of built-in macros as part of the minimal default RAM. The quasiquote macros
+;; should be in the required set, given that these built-in reader macros depend on them.
 (defun backquote-reader (stream char)
   (declare (ignore char))
-  (list 'quasi (read stream t nil t)))
+  (list 'lurk.api.ram:quasi (read stream t nil t)))
 
 (defun comma-reader (stream char)
   (declare (ignore char))
-  (list 'uq (read stream t nil t)))
+  (list 'lurk.api.ram:uq (read stream t nil t)))
 
 (defgeneric enhance-readtable-for-subset (subset)
   (:method ((subset api.impl:subset)) (progn))
@@ -97,7 +100,10 @@
   (intern (string-upcase string) :keyword))
 
 (defun subsetize (string)
-  (api.impl:intern-subset (intern (string-upcase string) :api.impl)))
+  (case (keywordize string)
+    (:min (api.impl:intern-subset 'api.impl:min-subset))
+    (:core (api.impl:intern-subset 'api.impl:core-subset))
+    (:ram (api.impl:intern-subset 'api.impl:ram-subset))))
 
 (opts:define-opts
   (:name :help
@@ -126,8 +132,7 @@
                      (intern (string-upcase type-arg) :keyword)
                      *repl-type*))
            (subset-arg (getf opts :subset))
-           (subset (or subset-arg
-                       (api.impl:intern-subset *default-subset-type*)))
+           (subset (or subset-arg *default-subset*))
            (to-run (mapcar #'pathname free-args)))
       (cond
         (to-run
@@ -190,7 +195,8 @@
          input
        (declare (ignore bang))
        (handle-meta-form repl state meta-form)))
-    (t (let ((result-values (multiple-value-list (eval-expr input state))))
+    (t
+     (let ((result-values (multiple-value-list (eval-expr input state))))
          (format-result-values repl state result-values)
          (let ((new-state (copy-repl-state state)))
            (setf (repl-state-ram new-state) (third result-values))

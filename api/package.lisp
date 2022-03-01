@@ -11,9 +11,10 @@
 (defpackage lurk.api.ram
   (:nicknames :api.ram)
   (:use :common-lisp :lurk.api)
-  (:shadow #:atom #:car #:cdr #:cons #:defmacro #:eq #:if #:lambda #:t #:+ #:- #:* #:/ #:=)
-  (:export #:atom #:car #:cdr #:cons #:current-env #:eq #:define #:defmacro #:if #:lambda #:let #:letrec #:nil #:quote
-           #:t #:+ #:- #:* #:/ #:=))
+  (:shadowing-import-from :lurk.api  #:atom #:car #:cdr #:cons #:defmacro #:eq #:if #:lambda #:t #:+ #:- #:* #:/ #:=)
+  (:export #:atom #:car #:cdr #:cons #:current-env #:current-ram #:eq #:define #:defined #:defmacro #:if #:lambda #:let #:letrec #:nil #:quote
+           #:t #:+ #:- #:* #:/ #:=
+           #:quasi #:uq))
 
 (defpackage lurk.api.impl
   (:nicknames :api.impl)

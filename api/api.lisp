@@ -9,6 +9,9 @@
 (defclass subset ()
   ((package :initarg :package :reader subset-package)))
 
+(defmethod print-object ((subset subset) (stream t))
+  (print-unreadable-object (subset stream :type t)))
+
 ;; Not actually implemented yet.
 (defclass min-subset (subset)
   ;; Will need its own package.
@@ -210,9 +213,8 @@
            ((eql api.ram:define)
             (destructuring-bind (var rhs) rest
               (let ((val (eval-expr rhs env)))
-                (values 'defined env (extend-ram-defs ram var val)))))
+                (values 'api.ram:defined env (extend-ram-defs ram var val)))))
            ((eql api.ram:defmacro)
-            (display *package*)
             ;; (defmacro (name param...) body...))
             (let* ((sig (car rest))
                    (body (cdr rest))
@@ -220,7 +222,7 @@
                    (params (cdr sig))
                    (rhs `(api:lambda ,params ,@body)))
               (let ((val (eval-expr rhs env)))
-                (values 'defined env (extend-ram-macros ram var val)))))
+                (values 'api.ram:defined env (extend-ram-macros ram var val)))))
            ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
@@ -266,6 +268,7 @@
                     env
                     ram))
            ((eql api:current-env) (values env env ram))
+           ((eql api.ram:current-ram) (values ram env ram))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head

@@ -26,8 +26,6 @@
 
 (defgeneric enhance-readtable-for-subset (subset)
   (:method ((subset api.impl:subset)) (progn))
-  (:method ((subset api.impl:min-subset))
-    (set-macro-character #\! #'bang-reader))
   (:method ((subset api.impl:ram-subset))
     (set-macro-character #\` #'backquote-reader)
     (set-macro-character #\, #'comma-reader))
@@ -131,7 +129,6 @@
            (subset (or subset-arg
                        (api.impl:intern-subset *default-subset-type*)))
            (to-run (mapcar #'pathname free-args)))
-      (display subset subset-arg)
       (cond
         (to-run
          (multiple-value-bind (repl state)

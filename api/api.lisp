@@ -3,6 +3,63 @@
 
 (defconstant api:t 'api:t)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Language Subsets
+
+(defclass subset ()
+  ((package :initarg :package :reader subset-package)))
+
+;; Not actually implemented yet.
+(defclass min-subset (subset)
+  ;; Will need its own package.
+  ((package :initform (find-package :lurk.api))))
+
+(defclass core-subset (subset)
+  ((package :initform (find-package :lurk.api))))
+
+(defclass ram-subset (subset)
+  ((package :initform (find-package :lurk.api.ram))))
+
+(defparameter *subsets* ())
+
+(defun find-subset (name) (find (find-class name) *subsets* :key #'class-of))
+
+(defun intern-subset (name)
+  (or (find-subset name)
+      (let ((subset (make-instance (find-class name))))
+        (pushnew subset *subsets*)
+        subset)))
+
+(defgeneric directly-contains (subset)
+  (:method ((subset t)) '())
+  (:method ((subset ram-subset)) (list (intern-subset 'core-subset)))
+  (:method ((subset core-subset)) (list (intern-subset 'min-subset))))
+
+;;; True if B is a (non-strict) subset of A.
+(defgeneric contains-p (a b)
+  (:method ((a t) (b t))
+    (or (eql (class-of a) (class-of b))
+        (member b (directly-contains a))
+        (some (lambda (x) (contains-p x b))
+              (directly-contains a)))))
+
+(test contains-p
+  (is (not (null (contains-p (intern-subset 'ram-subset) (intern-subset 'core-subset)))))
+  (is (not (null (contains-p (intern-subset 'ram-subset) (intern-subset 'min-subset)))))
+  (is (not (null (contains-p (intern-subset 'core-subset) (intern-subset 'min-subset)))))
+
+  ;; Subsets contain themselves.
+  (is (not (null (contains-p (intern-subset 'ram-subset) (intern-subset 'ram-subset)))))
+  (is (not (null (contains-p (intern-subset 'core-subset) (intern-subset 'core-subset)))))
+  (is (not (null (contains-p (intern-subset 'min-subset) (intern-subset 'min-subset)))))
+
+  (is (null (contains-p (intern-subset 'core-subset) (intern-subset 'ram-subset))))
+  (is (null (contains-p (intern-subset 'min-subset) (intern-subset 'ram-subset))))
+  (is (null (contains-p (intern-subset 'min-subset) (intern-subset 'core-subset)))))
+
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defstruct closure env function)
 
 (defun* (extend-closure -> closure) ((c closure) (rec-env env))
@@ -94,10 +151,10 @@
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
-           ((eql api:define)
+           ((eql api.ram:define)
             (destructuring-bind (var rhs) rest
-              `(api:define ,var ,(macro-expand rhs))))
-           ((eql api:defmacro)
+              `(api.ram:define ,var ,(macro-expand rhs))))
+           ((eql api.ram:defmacro)
             expr)
            ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
@@ -150,11 +207,12 @@
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
-           ((eql api:define)
+           ((eql api.ram:define)
             (destructuring-bind (var rhs) rest
               (let ((val (eval-expr rhs env)))
                 (values 'defined env (extend-ram-defs ram var val)))))
-           ((eql api:defmacro)
+           ((eql api.ram:defmacro)
+            (display *package*)
             ;; (defmacro (name param...) body...))
             (let* ((sig (car rest))
                    (body (cdr rest))

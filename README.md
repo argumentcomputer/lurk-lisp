@@ -11,12 +11,31 @@ For simplicity, install sbcl with package manager, e.g.
 > brew install sbcl
 ```
 
-or
+Or if daring, [from source](https://sourceforge.net/p/sbcl/sbcl/ci/master/tree/).
+
+On Ubuntu it is necessary to install more recent version of sbcl, since `apt` seems to use too old version. Follow next instructions:
+
+- download from github:
 ```bash
-> apt-get install sbcl
+git clone https://github.com/sbcl/sbcl
+``` 
+
+- change directory:
+```bash
+cd sbcl
 ```
 
-or if daring, [from source](https://sourceforge.net/p/sbcl/sbcl/ci/master/tree/).
+- compile (will take some time):
+```bash
+sh make.sh
+```
+
+- install (you may need use `sudo`):
+```bash
+sh install.sh
+```
+
+If you prefer a different configuration you can take a look on `README` and `INSTALL` files for more detailed information. 
 
 ### QuickLisp & ASDF
 

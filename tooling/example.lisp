@@ -9,7 +9,8 @@
                              (:core "tests/spec.lurk")
                              (:ram "ram/ram-tests.lurk")
                              (:ram "ram/macro-tests.lurk")
-                             (:ram "ram/quasi-tests.lurk")))
+                             (:ram "ram/quasi-tests.lurk")
+                             (:ram "ram/reader-tests.lurk")))
 
 (defparameter *repl-types-to-test* '(:api
                                      ;; FIXME: Uncomment when :impl tests are passing.

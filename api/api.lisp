@@ -3,6 +3,66 @@
 
 (defconstant api:t 'api:t)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Language Subsets
+
+(defclass subset ()
+  ((package :initarg :package :reader subset-package)))
+
+(defmethod print-object ((subset subset) (stream t))
+  (print-unreadable-object (subset stream :type t)))
+
+;; Not actually implemented yet.
+(defclass min-subset (subset)
+  ;; Will need its own package.
+  ((package :initform (find-package :lurk.api))))
+
+(defclass core-subset (subset)
+  ((package :initform (find-package :lurk.api))))
+
+(defclass ram-subset (subset)
+  ((package :initform (find-package :lurk.api.ram))))
+
+(defparameter *subsets* ())
+
+(defun find-subset (name) (find (find-class name) *subsets* :key #'class-of))
+
+(defun intern-subset (name)
+  (or (find-subset name)
+      (let ((subset (make-instance (find-class name))))
+        (pushnew subset *subsets*)
+        subset)))
+
+(defgeneric directly-contains (subset)
+  (:method ((subset t)) '())
+  (:method ((subset ram-subset)) (list (intern-subset 'core-subset)))
+  (:method ((subset core-subset)) (list (intern-subset 'min-subset))))
+
+;;; True if B is a (non-strict) subset of A.
+(defgeneric contains-p (a b)
+  (:method ((a t) (b t))
+    (or (eql (class-of a) (class-of b))
+        (member b (directly-contains a))
+        (some (lambda (x) (contains-p x b))
+              (directly-contains a)))))
+
+(test contains-p
+  (is (not (null (contains-p (intern-subset 'ram-subset) (intern-subset 'core-subset)))))
+  (is (not (null (contains-p (intern-subset 'ram-subset) (intern-subset 'min-subset)))))
+  (is (not (null (contains-p (intern-subset 'core-subset) (intern-subset 'min-subset)))))
+
+  ;; Subsets contain themselves.
+  (is (not (null (contains-p (intern-subset 'ram-subset) (intern-subset 'ram-subset)))))
+  (is (not (null (contains-p (intern-subset 'core-subset) (intern-subset 'core-subset)))))
+  (is (not (null (contains-p (intern-subset 'min-subset) (intern-subset 'min-subset)))))
+
+  (is (null (contains-p (intern-subset 'core-subset) (intern-subset 'ram-subset))))
+  (is (null (contains-p (intern-subset 'min-subset) (intern-subset 'ram-subset))))
+  (is (null (contains-p (intern-subset 'min-subset) (intern-subset 'core-subset)))))
+
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defstruct closure env function)
 
 (defun* (extend-closure -> closure) ((c closure) (rec-env env))
@@ -42,7 +102,9 @@
 
 (deftype env () 'list)
 
-(deftype built-in-unary () '(member api:atom api:car api:cdr api:quote))
+(defstruct ram defs macros)
+
+(deftype built-in-unary () '(member api:atom api:car api:cdr api:quote api:macroexpand))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
@@ -64,25 +126,103 @@
 (defun* (hlist -> list) (&rest exprs)
   (hlist* exprs))
 
-(defun* (eval-expr-for-p -> (values expr env)) ((p integer) (expr expr) (env env))
-  (labels ((eval-expr (expr env)
-           (eval-expr-for-p p expr env))
-         (apply-closure (closure args env)
-           (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
-                  (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
-             (values (apply (closure-function closure) (closure-env closure) quoted-args) env))))
+(defun* (is-macro-in-ram -> boolean) ((expr expr) (ram ram))
+  (and (symbolp expr)
+       (multiple-value-bind (result found-p)
+           (lookup-find expr (ram-macros ram))
+         found-p)))
+
+(defun* (macro-expand-macro -> expr) ((expr expr) (ram ram))
+  (let ((closure (lookup (car expr) (ram-macros ram))))
+    (etypecase closure
+      (closure (let* ((args (cdr expr))
+                      (quoted-args (mapcar (lambda (unevaled) `(quote ,unevaled)) args))
+                      (result (apply (closure-function closure) ram (closure-env closure) quoted-args)))
+                 result)))))
+
+(defun* (macro-expand-for-p -> expr) ((p integer) (expr expr) (ram ram))
+  (labels ((macro-expand (expr)
+             (macro-expand-for-p p expr ram))
+           (is-macro (expr)
+             (is-macro-in-ram expr ram)))
     (etypecase expr
-      ((or closure self-evaluating-symbol) (values expr env))
-      (symbol
-       (values (lookup expr env) env))
+      ((or closure self-evaluating-symbol) expr)
+      (symbol expr)
       (atom (unless (typep expr `(atom ,p))
               (error "~S is out of range [0, ~S)." expr p))
-       (values expr env))
+       expr)
+      (list
+       (destructuring-bind (head &rest rest) expr
+         (etypecase head
+           (closure expr)
+           ((eql api.ram:define)
+            (destructuring-bind (var rhs) rest
+              `(api.ram:define ,var ,(macro-expand rhs))))
+           ((eql api.ram:defmacro)
+            (destructuring-bind (var params body) rest
+              `(api.ram:defmacro ,var ,params ,(macro-expand body))))
+           ((eql api:let)
+            (destructuring-bind (bindings &optional body-expr) rest
+              `(api:let ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+           ((eql api:letrec)
+            (destructuring-bind (bindings &optional body-expr) rest
+              `(api:letrec ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+           ((eql api:lambda)
+            (destructuring-bind (args body-expr) rest
+              `(api:lambda ,args ,(macro-expand body-expr))
+              ))
+           ((eql api:if)
+            (destructuring-bind (condition a b) rest
+              `(api:if ,(macro-expand condition) ,(macro-expand a) ,(macro-expand b))))
+           ((eql api:current-env) expr)
+           ((eql api.ram:current-ram) expr)
+           (built-in-unary
+            (destructuring-bind (arg) rest
+              (case head
+                (api:quote expr)
+                (t `(,head ,(macro-expand arg))))))
+           (built-in-binary
+            (destructuring-bind (a b) rest
+              `(,head ,(macro-expand a) ,(macro-expand b))))
+           (t
+            (if (is-macro head)
+                (macro-expand (macro-expand-macro expr ram))
+                (mapcar #'macro-expand expr)))))))))
+
+(defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
+  (labels ((eval-expr (expr env)
+             (eval-expr-for-p p expr env ram))
+           (apply-closure (closure args env)
+             (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
+                    (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
+               (values (apply (closure-function closure) ram (closure-env closure) quoted-args) env ram))))
+    (etypecase expr
+      ((or closure self-evaluating-symbol) (values expr env ram))
+      (symbol
+       (multiple-value-bind (v found-p)
+           (lookup-find expr (ram-defs ram))
+         (values
+          (if found-p
+              v
+              (lookup expr env))
+          env ram)))
+      (atom (unless (typep expr `(atom ,p))
+              (error "~S is out of range [0, ~S)." expr p))
+       (values expr env ram))
 
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
            (closure (apply-closure head env rest))
+           ((eql api.ram:define)
+            (destructuring-bind (var rhs) rest
+              (let ((val (eval-expr rhs env)))
+                (values var env (extend-ram-defs ram var val)))))
+           ((eql api.ram:defmacro)
+            (destructuring-bind (var params body) rest
+              (let* ((rhs `(api:lambda ,params ,body))
+                     (val (eval-expr rhs env)))
+                (values var env (extend-ram-macros ram var val)))))
            ((eql api:let)
             (destructuring-bind (bindings &optional body-expr) rest
               (let ((new-env env))
@@ -107,35 +247,40 @@
               ;; confusing possibility of wastefully including some ignored
               ;; first expressions in the body.
               (let* ((env-var (gensym "ENV"))
-                     (source `(lambda (,env-var ,@args)
+                     (ram-var (gensym "RAM"))
+                     (source `(lambda (,ram-var ,env-var ,@args)
                                 (eval-expr-for-p ,p
                                                  ;; Close your eyes and believe.
                                                  `(api:let (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
                                                     ,',body-expr)
-                                                 ,env-var))))
-                (values (make-closure :env env :function (compile nil source)) env))))
+                                                 ,env-var
+                                                 ,ram-var))))
+                (values (make-closure :env env :function (compile nil source)) env ram))))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               (let ((result (if (eval-expr condition env)
                                 (eval-expr a env)
                                 (eval-expr b env))))
-                (values result env))))
+                (values result env ram))))
            #+(or) ;; Disabled initially, since variadic functions aren't simple in other implementations.
            ((eql api:list)
             (values (hlist* (mapcar (lambda (x) (eval-expr x env)) rest))
-                    env))
-           ((eql api:current-env) (values env env))
+                    env
+                    ram))
+           ((eql api:current-env) (values env env ram))
+           ((eql api.ram:current-ram) (values ram env ram))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head
                               (api:atom
                                (typecase (eval-expr arg env)
-                                 (atom (values api:t env))
-                                 (t (values api:nil env))))
+                                 (atom api:t)
+                                 (t api:nil)))
                               (api:car (car (eval-expr arg env)))
                               (api:cdr (cdr (eval-expr arg env)))
-                              (api:quote (quote-expr arg)))))
-                (values result env))))
+                              (api:quote (quote-expr arg))
+                              (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))
+                (values result env ram))))
            (built-in-binary
             (destructuring-bind (a b) rest
               (let* ((evaled-a (eval-expr a env))
@@ -149,7 +294,7 @@
                                (api:= (if (= evaled-a evaled-b) api:t api:nil))
                                (api:eq (if (eq evaled-a evaled-b) api:t api:nil))
                                (api:cons (hcons evaled-a evaled-b)))))
-                (values result env))))
+                (values result env ram))))
            (t
             ;; (fn . args)
             ;; First evaluate FN, then substitue result in new expression to evaluate.
@@ -166,8 +311,9 @@
     (t expr)))
 
 (defun* (make-evaluator -> function) ((p (integer 0)))
-  (lambda (expr env)
-    (eval-expr-for-p p expr env)))
+  (lambda (expr env ram)
+    (let ((r (macro-expand-for-p p expr ram)))
+      (eval-expr-for-p p r env ram))))
 
 (defun* (lookup -> (values expr boolean)) ((var symbol) (env env))
   (multiple-value-bind (result found-p)
@@ -204,6 +350,13 @@
                       (lookup-find var (cdr env))))))))
 
 (defun* (empty-env -> env) ())
+(defun* (empty-ram -> ram) () (make-ram :defs (empty-env) :macros (empty-env)))
+
+(defun* extend-ram-defs ((ram ram) (var expr) (val expr))
+  (make-ram :defs (extend (ram-defs ram) var val) :macros (ram-macros ram)))
+
+(defun* extend-ram-macros ((ram ram) (var expr) (val expr))
+  (make-ram :defs (ram-defs ram) :macros (extend (ram-macros ram) var val)))
 
 (defun* extend ((env env) (var expr) (val expr))
   (check-type var symbol)
@@ -224,9 +377,10 @@
 (test eval-expr-for-p
   (let* ((p 1009)
          (evaluator (make-evaluator 1009))
-         (empty-env (empty-env)))
+         (empty-env (empty-env))
+         (ram (empty-ram)))
     (flet ((evaluate (expr env)
-             (funcall evaluator expr env)))
+             (funcall evaluator expr env ram)))
       (is (eql 1 (evaluate 1 empty-env)))
       (signals error (evaluate (1+ p) empty-env))
       (signals error (evaluate p empty-env))
@@ -366,9 +520,9 @@
 (defparameter *default-p* #x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001 
   "Order of BLS12-381's scalar field. (Default *for now*.)")
 
-(defun eval (expr env)
+(defun eval (expr env ram)
   "Convenience function to evaluate without specifying field order."
-  (eval-expr-for-p *default-p* expr env))
+  (eval-expr-for-p *default-p* expr env ram))
 
 ;; Using Extended Euclidean Algorithm
 ;; https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Modular_integers

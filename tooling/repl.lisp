@@ -25,7 +25,12 @@
 
 (defun comma-reader (stream char)
   (declare (ignore char))
-  (list 'lurk.api.ram:uq (read stream t nil t)))
+  (case (peek-char nil stream t nil t)
+    ((#\@)
+     (read-char stream nil nil t)
+     (list 'lurk.api.ram:uqs (read stream t nil t)))
+    (otherwise
+     (list 'lurk.api.ram:uq (read stream t nil t)))))
 
 (defgeneric enhance-readtable-for-subset (subset)
   (:method ((subset api.impl:subset)) (progn))

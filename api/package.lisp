@@ -14,7 +14,7 @@
   (:shadowing-import-from :lurk.api  #:atom #:car #:cdr #:cons #:defmacro #:eq #:if #:lambda #:t #:+ #:- #:* #:/ #:=)
   (:export #:atom #:car #:cdr #:cons #:current-env #:current-ram #:eq #:define #:defmacro #:if #:lambda #:let #:letrec #:nil #:quote
            #:t #:+ #:- #:* #:/ #:=
-           #:quasi #:uq))
+           #:quasi #:uq #:uqs))
 
 (defpackage lurk.api.impl
   (:nicknames :api.impl)

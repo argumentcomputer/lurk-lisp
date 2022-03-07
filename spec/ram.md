@@ -40,5 +40,5 @@ The form `(macroexpand <expr>)` evaluates to the expansion of of the evaluation 
 
 ## Quasiquotes
 
-The reader converts backquote to `quasi` and comma to `uq` (for unquote).
+The reader converts backquote to `quasi` and comma to `uq` (for unquote) and `,@` to `uqs` (for unquote-splicing).
 Then, `quasi` can be implemented as a Lurk-level recursive macro.

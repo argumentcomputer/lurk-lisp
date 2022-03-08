@@ -3,17 +3,17 @@ This repo is the Lisp counterpart to [lurk-rs](https://github.com/lurk-lang/lurk
 
 # Installation
 
-## sbcl
+## `sbcl`
 
-For simplicity, install sbcl with package manager, e.g.
+### Mac OS X
 
 ```bash
 > brew install sbcl
 ```
 
-Or if daring, [from source](https://sourceforge.net/p/sbcl/sbcl/ci/master/tree/).
+### Ubuntu
 
-On Ubuntu it is necessary to install more recent version of sbcl, since `apt` seems to use too old version. Follow next instructions:
+The package manager version of `sbcl` is too old, so install from source following these instructions.
 
 - download from github:
 ```bash
@@ -30,25 +30,25 @@ cd sbcl
 sh make.sh
 ```
 
-- install (you may need use `sudo`):
+- install (you may need `sudo`):
 ```bash
 sh install.sh
 ```
 
-If you prefer a different configuration you can take a look on `README` and `INSTALL` files for more detailed information. 
+If you prefer a different configuration, follow the `README` and `INSTALL` files of the `sbcl` source repo.
 
 ### QuickLisp & ASDF
 
 Install [QuickLisp](https://www.quicklisp.org):
 
 - Download the file for installation. (https://beta.quicklisp.org/quicklisp.lisp)
-- Then run sbcl with that file loaded by this command.
+- Then run `sbcl` with that file loaded by this command.
 
 ```sh
 sbcl --load path/of/quicklisp.lisp
 ```
 
-After sbcl has launched, type in the command below.
+After `sbcl` has launched, type in the command below.
 
 ```lisp
 (quicklisp-quickstart:install)
@@ -68,6 +68,7 @@ QuickLisp needs to find the project, so add a symlink:
 > cd ~/quicklisp/local-projects
 > ln -s ~/<installdir>/lurk/lurk.asd lurk.asd
 ```
+
 # Submodules
 
 Lurk source files used in tests are in the [lurk-lib](https://github.com/lurk-lang/lurk-lib) submodule. You must
@@ -89,13 +90,9 @@ Running tests should show output similar to the following.
 bin/cl -Q -sp lurk -x "(asdf:test-system \"lurk\")"
 
 Running test suite MASTER-SUITE
- Running test suite API-IMPL-SUITE
-  Running test ATOM ..
-  Running test EVAL-EXPR-FOR-P .....................................................
-  Running test INVERSE ............................................................................................................................................................................................
- Running test suite API-TOOLING-SUITE
- Did 243 checks.
-    Pass: 243 (100%)
+...
+ Did 471 checks.
+    Pass: 471 (100%)
     Skip: 0 ( 0%)
     Fail: 0 ( 0%)
 
@@ -124,7 +121,7 @@ API> :help
 :RUN <PATH> => Evaluate expressions from file.
 
 API> :load "lurk-lib/example/lib.lurk"
-Read from lurk-lib/example/lib.lurk: (LETREC*
+Read from lurk-lib/example/lib.lurk: (LETREC
                                            ((SQUARE (LAMBDA (X) (* X X))))
                                            (CURRENT-ENV))
 
@@ -136,7 +133,7 @@ API> :clear
 API> :run "lurk-lib/example/test.lurk"
 Read from lurk-lib/example/test.lurk: (LURK.TOOLING.REPL::!
                                             (:LOAD "lib.lurk"))
-Read from /Users/clwk/fil/lurk/lurk-lib/example/lib.lurk: (LETREC*
+Read from /Users/clwk/fil/lurk/lurk-lib/example/lib.lurk: (LETREC
                                                            ((SQUARE
                                                              (LAMBDA (X)
                                                               (* X X))))
@@ -152,12 +149,9 @@ API> :quit
 
 ➜  lurk git:(master) ✗ 
 ```
+
 # Spec
 [High-level Lurk Language Specification](spec/v0-1.md)
-
-# Documentation
-
-TODO
 
 ## License
 

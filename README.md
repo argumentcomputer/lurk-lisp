@@ -153,7 +153,7 @@ API> :quit
 ➜  lurk git:(master) ✗ 
 ```
 # Spec
-[High-level Lurk Language Specification](spec/v0-1.md)]
+[High-level Lurk Language Specification](spec/v0-1.md)
 
 # Documentation
 

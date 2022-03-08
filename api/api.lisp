@@ -132,6 +132,11 @@
            (lookup-find expr (ram-macros ram))
          found-p)))
 
+(defun* (nest-apps -> expr) ((xs expr))
+  (if (or (null xs) (null (cdr xs)) (null (cddr xs)))
+      xs
+      (nest-apps (cons (list (car xs) (cadr xs)) (cddr xs)))))
+
 (defun* (macro-expand-macro -> expr) ((expr expr) (ram ram))
   (let ((closure (lookup (car expr) (ram-macros ram))))
     (etypecase closure
@@ -169,8 +174,10 @@
               `(api:letrec ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
            ((eql api:lambda)
             (destructuring-bind (args body-expr) rest
-              `(api:lambda ,args ,(macro-expand body-expr))
-              ))
+              (if (or (null args) (null (cdr args)))
+                  `(api:lambda ,args ,(macro-expand body-expr))
+                  `(api:lambda (,(car args)) ,(macro-expand `(api:lambda ,(cdr args) ,body-expr)))
+                  )))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               `(api:if ,(macro-expand condition) ,(macro-expand a) ,(macro-expand b))))
@@ -187,7 +194,7 @@
            (t
             (if (is-macro head)
                 (macro-expand (macro-expand-macro expr ram))
-                (mapcar #'macro-expand expr)))))))))
+                (nest-apps (mapcar #'macro-expand expr))))))))))
 
 (defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (labels ((eval-expr (expr env)

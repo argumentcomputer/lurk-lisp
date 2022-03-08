@@ -286,7 +286,7 @@
                               (api:car (car (eval-expr arg env)))
                               (api:cdr (cdr (eval-expr arg env)))
                               (api:emit (let ((v (eval-expr arg env)))
-                                          (format t "~A~%" v)
+                                          (format t "~S~%" v)
                                           v))
                               (api:quote (quote-expr arg))
                               (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))

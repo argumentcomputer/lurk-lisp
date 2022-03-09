@@ -5,7 +5,7 @@
   (:use :common-lisp)
   ;; QUOTE and NIL are not shadowed, to ease list syntax handling.
   (:shadow #:atom #:car #:cdr #:cons #:eq #:if #:lambda #:t #:+ #:- #:* #:/ #:=)
-  (:export #:atom #:car #:cdr #:cons #:current-env #:eq #:if #:lambda #:let #:letrec #:nil #:quote #:macroexpand
+  (:export #:atom #:car #:cdr #:cons #:current-env #:emit #:eq #:if #:lambda #:let #:letrec #:nil #:quote #:macroexpand
            #:t #:+ #:- #:* #:/ #:=))
 
 (defpackage lurk.api.ram
@@ -26,6 +26,6 @@
                 #:-> #:labels*)
   (:import-from :lurk.macros #:display #:symbolconc #:awhen #:it)
   (:shadow #:atom #:eval)
-  (:export #:eval #:eval-expr #:empty-env #:empty-ram #:find-subset #:make-evaluator #:*default-p*
+  (:export #:eval #:eval-expr #:emit-out #:empty-env #:empty-ram #:find-subset #:make-evaluator #:*default-p*
            #:directly-contains #:subset #:intern-subset #:subset-package #:min-subset #:core-subset #:ram-subset))
 

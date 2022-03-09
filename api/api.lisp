@@ -3,6 +3,10 @@
 
 (defconstant api:t 'api:t)
 
+(defun emit-out (out v)
+  (let ((*print-circle* t))
+    (format out "~S~%" v)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Language Subsets
 
@@ -104,7 +108,7 @@
 
 (defstruct ram defs macros)
 
-(deftype built-in-unary () '(member api:atom api:car api:cdr api:quote api:macroexpand))
+(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:quote api:macroexpand))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
@@ -131,6 +135,11 @@
        (multiple-value-bind (result found-p)
            (lookup-find expr (ram-macros ram))
          found-p)))
+
+(defun* (nest-apps -> expr) ((xs expr))
+  (if (or (null xs) (null (cdr xs)) (null (cddr xs)))
+      xs
+      (nest-apps (cons (list (car xs) (cadr xs)) (cddr xs)))))
 
 (defun* (macro-expand-macro -> expr) ((expr expr) (ram ram))
   (let ((closure (lookup (car expr) (ram-macros ram))))
@@ -169,8 +178,10 @@
               `(api:letrec ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
            ((eql api:lambda)
             (destructuring-bind (args body-expr) rest
-              `(api:lambda ,args ,(macro-expand body-expr))
-              ))
+              (if (or (null args) (null (cdr args)))
+                  `(api:lambda ,args ,(macro-expand body-expr))
+                  `(api:lambda (,(car args)) ,(macro-expand `(api:lambda ,(cdr args) ,body-expr)))
+                  )))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               `(api:if ,(macro-expand condition) ,(macro-expand a) ,(macro-expand b))))
@@ -187,7 +198,7 @@
            (t
             (if (is-macro head)
                 (macro-expand (macro-expand-macro expr ram))
-                (mapcar #'macro-expand expr)))))))))
+                (nest-apps (mapcar #'macro-expand expr))))))))))
 
 (defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (labels ((eval-expr (expr env)
@@ -278,6 +289,9 @@
                                  (t api:nil)))
                               (api:car (car (eval-expr arg env)))
                               (api:cdr (cdr (eval-expr arg env)))
+                              (api:emit (let ((v (eval-expr arg env)))
+                                          (emit-out t v)
+                                          v))
                               (api:quote (quote-expr arg))
                               (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))
                 (values result env ram))))

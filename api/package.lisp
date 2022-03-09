@@ -26,6 +26,6 @@
                 #:-> #:labels*)
   (:import-from :lurk.macros #:display #:symbolconc #:awhen #:it)
   (:shadow #:atom #:eval)
-  (:export #:eval #:eval-expr #:empty-env #:empty-ram #:find-subset #:make-evaluator #:*default-p*
+  (:export #:eval #:eval-expr #:emit-out #:empty-env #:empty-ram #:find-subset #:make-evaluator #:*default-p*
            #:directly-contains #:subset #:intern-subset #:subset-package #:min-subset #:core-subset #:ram-subset))
 

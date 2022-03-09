@@ -3,6 +3,10 @@
 
 (defconstant api:t 'api:t)
 
+(defun emit-out (out v)
+  (let ((*print-circle* t))
+    (format out "~S~%" v)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Language Subsets
 
@@ -286,7 +290,7 @@
                               (api:car (car (eval-expr arg env)))
                               (api:cdr (cdr (eval-expr arg env)))
                               (api:emit (let ((v (eval-expr arg env)))
-                                          (format t "~S~%" v)
+                                          (emit-out t v)
                                           v))
                               (api:quote (quote-expr arg))
                               (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))

@@ -93,7 +93,7 @@
 (defgeneric* format-result-values ((repl repl) (state repl-state) (values list))
   (:method ((repl repl) (state repl-state) (values list))
     (let ((evaled (car values)))
-      (format-output repl (repl-state-out state) "~S~%" evaled)))
+      (lurk.api.impl:emit-out (repl-state-out state) evaled)))
 
   (:method :after ((repl impl-repl) (state repl-state) (values list))
     (destructuring-bind (evaled new-env iterations)

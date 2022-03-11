@@ -7,10 +7,13 @@ The `:ram` subset provides a global memory (RAM), global definitions (`define`) 
 
 ## RAM
 
-The RAM is threaded through the program, but excluding non-tail recursive calls such as evaluation of arguments.
-This shallow threading enables top-level definitions as well as macros generating (one) macro.
+The RAM is threaded through the program.
+The threading is shallow: most non-tail recursive calls such as evaluation of arguments do not thread the RAM.
+A notable exception: the `begin` form does thread the RAM through the evaluation of its sub-expressions.
 
-The RAM is passed in to closures during evaluation, so they see the most up to date RAM at any point.
+This threading enables top-level definitions as well as macros generating definitions and macros.
+
+The RAM is passed in to closures during evaluation, so closures have access to definitions created after them.
 
 ### `current-ram`
 

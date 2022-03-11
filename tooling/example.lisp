@@ -8,6 +8,7 @@
                              (:core "meta-letrec-tests.lurk")
                              (:core "fibonacci-tests.lurk")
                              (:core "tests/auto-curry.lurk")
+                             (:core "tests/eval.lurk")
                              (:core "tests/spec.lurk")
                              (:ram "ram/ram-tests.lurk")
                              (:ram "ram/macro-tests.lurk")

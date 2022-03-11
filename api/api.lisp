@@ -534,7 +534,7 @@
 (defparameter *default-p* #x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001 
   "Order of BLS12-381's scalar field. (Default *for now*.)")
 
-(defun eval (expr env ram)
+(defun evaluate (expr env ram)
   "Convenience function to evaluate without specifying field order."
   (eval-expr-for-p *default-p* expr env ram))
 

@@ -16,10 +16,6 @@
   (:nicknames :lau)
   (:use :lurk.tooling.repl :lurk.api :lurk.api.impl))
 
-(defpackage lurk.impl-user
-  (:nicknames :liu)
-  (:use :lurk.tooling.repl :lurk.lang))
-
 (defpackage lurk.example
   (:use :common-lisp)
   (:local-nicknames (#:repl #:lurk.tooling.repl))

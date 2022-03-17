@@ -14,10 +14,7 @@
                              (:ram "ram/quasi-tests.lurk")
                              (:ram "ram/reader-tests.lurk")))
 
-(defparameter *repl-types-to-test* '(:api
-                                     ;; FIXME: Uncomment when :impl tests are passing.
-                                     ;;:impl
-                                     ))
+(defparameter *repl-types-to-test* '(:api))
 
 (defparameter *project-dir* nil)
 

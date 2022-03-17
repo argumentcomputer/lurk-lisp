@@ -15,14 +15,8 @@
                         :components
                         ((:file "package")
                          (:file "api")))
-               (:module "impl"
-                        :depends-on ("base")
-                        :serial t
-                        :components
-                        ((:file "package")
-                         (:file "lang")))
                (:module "tooling"
-                        :depends-on ("api" "impl")
+                        :depends-on ("api")
                         :serial t
                         :components
                         ((:file "package")

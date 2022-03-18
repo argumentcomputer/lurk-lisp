@@ -10,7 +10,6 @@
 
 (defclass repl () ())
 (defclass api-repl (repl) ())
-(defclass impl-repl (repl) ())
 
 (defun bang-reader (stream char)
   (declare (ignore char))
@@ -49,57 +48,34 @@
 
 (defgeneric* repl-package ((repl repl))
   (:method ((repl api-repl))
-    (find-package :lurk.api-user))
-  (:method ((repl impl-repl))
-    (find-package :lurk.impl-user)))
+    (find-package :lurk.api-user)))
 
 (defgeneric* identifier ((repl repl))
-  (:method ((repl api-repl)) :api)
-  (:method ((repl impl-repl)) :impl))
+  (:method ((repl api-repl)) :api))
 
 (defgeneric* repl-nil ((repl repl))
-  (:method ((repl api-repl)) nil)
-  (:method ((repl impl-repl)) (lurk.lang::sym nil)))
+  (:method ((repl api-repl)) nil))
 
 (defgeneric* empty-ram ((repl repl))
   (:method ((repl api-repl))
-    (api-impl:empty-ram))
-  (:method ((repl impl-repl))
-    ;; TODO(namin): dead.
     (api-impl:empty-ram)))
 
 (defgeneric* empty-env ((repl repl))
   (:method ((repl api-repl))
-    (api-impl:empty-env))
-  (:method ((repl impl-repl))
-    ;; TODO: make this an external symbol, but not in LURK.LANG.
-    (lurk.lang::empty-sym-env)))
+    (api-impl:empty-env)))
 
 (defgeneric* make-evaluator ((repl repl) (field-order integer))
   (:method ((repl api-repl) (field-order integer))
-    (api-impl:make-evaluator field-order))
-  (:method ((repl impl-repl) (field-order integer))
-    (lurk.lang::make-evaluator field-order)))
+    (api-impl:make-evaluator field-order)))
 
 (defgeneric* format-output ((repl repl) (out t) (format-string string) &rest format-args)
   (:method ((repl repl) (out t) (format-string string) &rest format-args)
-    (apply #'format out format-string format-args))
-  (:method :around ((repl impl-repl) (out t) (format-string string) &rest format-args)
-    (declare (ignore format-args))
-    (let ((lurk.lang::*print-legibly* t)
-          (lurk.lang::*elide-function-envs* t))
-      (call-next-method))))
+    (apply #'format out format-string format-args)))
 
 (defgeneric* format-result-values ((repl repl) (state repl-state) (values list))
   (:method ((repl repl) (state repl-state) (values list))
     (let ((evaled (car values)))
-      (lurk.api.impl:emit-out (repl-state-out state) evaled)))
-
-  (:method :after ((repl impl-repl) (state repl-state) (values list))
-    (destructuring-bind (evaled new-env iterations)
-        values
-      (declare (ignore evaled new-env))
-      (format-output repl (repl-state-out state) "count: ~D~%" iterations))))
+      (lurk.api.impl:emit-out (repl-state-out state) evaled))))
 
 (defun keywordize (string)
   (intern (string-upcase string) :keyword))
@@ -151,8 +127,7 @@
 
 (defun* make-repl ((type keyword))
   (ecase type
-    (:api (make-instance 'api-repl))
-    (:impl (make-instance 'impl-repl))))
+    (:api (make-instance 'api-repl))))
 
 
 (defun make-repl-and-state (&key (subset *default-subset*) (type *repl-type*) (prompt nil prompt-p) (field-order *default-field-order*) (in *standard-input*)

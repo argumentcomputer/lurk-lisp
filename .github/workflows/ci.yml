@@ -17,6 +17,7 @@ jobs:
           - sbcl-bin
 
     env:
+      LISP: ${{ matrix.lisp }}
       ON_CI_SERVER: ${{ 1 }}
 
     steps:

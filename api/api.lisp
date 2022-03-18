@@ -187,6 +187,8 @@
               `(api:if ,(macro-expand condition) ,(macro-expand a) ,(macro-expand b))))
            ((eql api:current-env) expr)
            ((eql api.ram:current-ram) expr)
+           ((eql api:eval)
+            `(api:eval ,@(mapcar #'macro-expand rest)))
            (built-in-unary
             (destructuring-bind (arg) rest
               (case head
@@ -280,6 +282,10 @@
                     ram))
            ((eql api:current-env) (values env env ram))
            ((eql api.ram:current-ram) (values ram env ram))
+           ((eql api:eval)
+            (let ((ev-expr (macro-expand-for-p p (eval-expr (car rest) env) ram))
+                  (ev-env (if (null (cdr rest)) (empty-env) (eval-expr (car (cdr rest)) env))))
+              (eval-expr ev-expr ev-env)))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head
@@ -534,7 +540,7 @@
 (defparameter *default-p* #x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001 
   "Order of BLS12-381's scalar field. (Default *for now*.)")
 
-(defun eval (expr env ram)
+(defun evaluate (expr env ram)
   "Convenience function to evaluate without specifying field order."
   (eval-expr-for-p *default-p* expr env ram))
 

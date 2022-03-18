@@ -284,7 +284,7 @@
            ((eql api.ram:current-ram) (values ram env ram))
            ((eql api:eval)
             (let ((ev-expr (macro-expand-for-p p (eval-expr (car rest) env) ram))
-                  (ev-env (if (null (cdr rest)) env (eval-expr (car (cdr rest)) env))))
+                  (ev-env (if (null (cdr rest)) (empty-env) (eval-expr (car (cdr rest)) env))))
               (eval-expr ev-expr ev-env)))
            (built-in-unary
             (destructuring-bind (arg) rest

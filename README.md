@@ -1,6 +1,6 @@
 # lurk (Lurk in Lisp)
 
-This repo is the Lisp counterpart to [lurk-rs (Lurk in Rust)](https://github.com/lurk-lang/lurk-rs). Lurk in Lisp allows for documentation and implementation of the API without the proof-related mechanisms of Lurk in Rust. The Lisp version of Lurk provides specifications that defines the semantics of Lurk and allows to explore its capabilities and future iterations of the language.
+This repo is the Lisp counterpart to [lurk-rs (Lurk in Rust)](https://github.com/lurk-lang/lurk-rs). Lurk in Lisp allows for documentation and implementation of the API without the proof-related mechanisms of Lurk in Rust. The Lisp version of Lurk provides specifications that define the semantics of Lurk and allow for exploration of its capabilities and future iterations of the language.
 
 # Specifications
 

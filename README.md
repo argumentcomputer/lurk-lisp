@@ -1,5 +1,11 @@
-# lurk
-This repo is the Lisp counterpart to [lurk-rs](https://github.com/lurk-lang/lurk-rs). Lurk in Lisp allows for documentation and implementation of the API without the proof-related mechanisms of Lurk in Rust. The Lisp version of Lurk provides a spec that defines the semantics of Lurk and allows you to explore its capabilities.
+# lurk (Lurk in Lisp)
+
+This repo is the Lisp counterpart to [lurk-rs (Lurk in Rust)](https://github.com/lurk-lang/lurk-rs). Lurk in Lisp allows for documentation and implementation of the API without the proof-related mechanisms of Lurk in Rust. The Lisp version of Lurk provides specifications that defines the semantics of Lurk and allows to explore its capabilities and future iterations of the language.
+
+# Specifications
+
+- [High-level Core Lurk Language Specification](spec/v0-1.md)
+- [RAM Subset Specification](spec/ram.md): this subset defines a global RAM, supporting global definitions and macros.
 
 # Installation
 
@@ -13,29 +19,34 @@ This repo is the Lisp counterpart to [lurk-rs](https://github.com/lurk-lang/lurk
 
 ### Ubuntu
 
-The package manager version of `sbcl` is too old, so install from source following these instructions.
+The package manager version of `sbcl` is too old, so install from source.
 
-- download from github:
+<details>
+  <summary>Instructions to install from source</summary>
+
+- Download from github:
 ```bash
 git clone https://github.com/sbcl/sbcl
 ``` 
 
-- change directory:
+- Change directory:
 ```bash
 cd sbcl
 ```
 
-- compile (will take some time):
+- Compile (will take some time):
 ```bash
 sh make.sh
 ```
 
-- install (you may need `sudo`):
+- Install (you may need `sudo`):
 ```bash
 sh install.sh
 ```
 
 If you prefer a different configuration, follow the `README` and `INSTALL` files of the `sbcl` source repo.
+
+</details>
 
 ### QuickLisp & ASDF
 
@@ -91,8 +102,8 @@ bin/cl -Q -sp lurk -x "(asdf:test-system \"lurk\")"
 
 Running test suite MASTER-SUITE
 ...
- Did 471 checks.
-    Pass: 471 (100%)
+Did 272 checks.
+    Pass: 272 (100%)
     Skip: 0 ( 0%)
     Fail: 0 ( 0%)
 
@@ -149,9 +160,6 @@ API> :quit
 
 ➜  lurk git:(master) ✗ 
 ```
-
-# Spec
-[High-level Lurk Language Specification](spec/v0-1.md)
 
 ## License
 

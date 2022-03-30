@@ -21,7 +21,9 @@ jobs:
       ON_CI_SERVER: ${{ 1 }}
 
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: 40ants/setup-lisp@v1
         with:
           asdf-system: cl-info

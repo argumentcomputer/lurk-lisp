@@ -36,26 +36,25 @@
             "~A" (get-output-stream-string out))))))
 
 (test examples-internally
-  (unless (uiop:getenv "ON_CI_SERVER")
-    (let* ((root-dir (or *project-dir* (uiop/os:getcwd)))
-           (example-dir (merge-pathnames "lurk-lib/example/" root-dir)))
-      (dolist (spec *lurk-tests*)
-        (destructuring-bind (subset test-file)
-            spec
-          (let ((subset (case subset
-                          (:core (api.impl:intern-subset 'api.impl:core-subset))
-                          (:ram (api.impl:intern-subset 'api.impl:ram-subset)))))
-            (let ((merged (merge-pathnames test-file example-dir)))
-              (dolist (type *repl-types-to-test*)
-                (let ((out (make-string-output-stream)))
-                  (multiple-value-bind (repl state)
-                      (repl:make-repl-and-state :type type :out out :subset subset)
-                    (is (not (null
-                              (handler-case
-                                  ;; Return T if Lurk file is run successfully.
-                                  (prog1 t
-                                    (repl:run repl state merged))
-                                ;; Return NIL if an error is signaled while running.
-                                (error () nil))))
-                        "~A" (get-output-stream-string out))))))))))))
+      (let* ((root-dir (or *project-dir* (uiop/os:getcwd)))
+             (example-dir (merge-pathnames "lurk-lib/example/" root-dir)))
+        (dolist (spec *lurk-tests*)
+          (destructuring-bind (subset test-file)
+              spec
+            (let ((subset (case subset
+                            (:core (api.impl:intern-subset 'api.impl:core-subset))
+                            (:ram (api.impl:intern-subset 'api.impl:ram-subset)))))
+              (let ((merged (merge-pathnames test-file example-dir)))
+                (dolist (type *repl-types-to-test*)
+                  (let ((out (make-string-output-stream)))
+                    (multiple-value-bind (repl state)
+                        (repl:make-repl-and-state :type type :out out :subset subset)
+                      (is (not (null
+                                (handler-case
+                                    ;; Return T if Lurk file is run successfully.
+                                    (prog1 t
+                                      (repl:run repl state merged))
+                                  ;; Return NIL if an error is signaled while running.
+                                  (error () nil))))
+                          "~A" (get-output-stream-string out)))))))))))
 

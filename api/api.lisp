@@ -108,7 +108,7 @@
 
 (defstruct ram defs macros)
 
-(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:quote api:macroexpand))
+(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:procedure api:quote api:macroexpand))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
@@ -307,6 +307,10 @@
                               (api:emit (let ((v (eval-expr arg env)))
                                           (emit-out t v)
                                           v))
+                              (api:procedure
+                               (typecase (eval-expr arg env)
+                                 (closure api:t)
+                                 (t api:nil)))
                               (api:quote (quote-expr arg))
                               (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))
                 (values result env ram))))

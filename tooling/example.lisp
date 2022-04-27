@@ -15,6 +15,7 @@
                              (:ram "ram/ram-begin-tests.lurk")
                              (:ram "ram/macro-tests.lurk")
                              (:ram "ram/quasi-tests.lurk")
+                             (:ram "ram/compile-tests.lurk")
                              (:ram "ram/reader-tests.lurk")))
 
 (defparameter *repl-types-to-test* '(:api))

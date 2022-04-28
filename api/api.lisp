@@ -316,13 +316,16 @@
                               (api.ram:compile
                                (let ((x (eval-expr arg env)))
                                  (etypecase x
-                                   (closure (let ((opt-body (eval-expr `(api.ram:compile-closure
-                                                                         (api:quote ,(closure-body x))
-                                                                         (api:quote ,(closure-params x))
-                                                                         (api:quote api:nil) ;; TODO: broken RAM
-                                                                         (api:quote ,(closure-env x)))
-                                                                       env)))
-                                              (eval-expr `(api:lambda ,(closure-params x) ,opt-body) (closure-env x))))))))))
+                                   (closure
+                                    (let ((opt-body (eval-expr
+                                                     ;; auto-currying!
+                                                     `((((api.ram:compile-closure
+                                                          (api:quote ,(closure-body x)))
+                                                         (api:quote ,(closure-params x)))
+                                                        api:nil) ;; TODO: broken RAM
+                                                       (api:quote ,(closure-env x)))
+                                                     env)))
+                                      (eval-expr `(api:lambda ,(closure-params x) ,opt-body) (closure-env x))))))))))
                 (values result env ram))))
            (built-in-binary
             (destructuring-bind (a b) rest

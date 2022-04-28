@@ -67,11 +67,11 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defstruct closure env function)
+(defstruct closure env function params body)
 
 (defun* (extend-closure -> closure) ((c closure) (rec-env env))
   (let ((extended (hcons rec-env (closure-env c))))
-    (make-closure :env extended :function (closure-function c))))
+    (make-closure :env extended :function (closure-function c) :params (closure-params c) :body (closure-body c))))
 
 ;; The following types loosely specify the language which EXPR allows.
 
@@ -108,7 +108,7 @@
 
 (defstruct ram defs macros)
 
-(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:procedure api:quote api:macroexpand))
+(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:procedure api:quote api:macroexpand api.ram:compile))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
@@ -270,7 +270,7 @@
                                                     ,',body-expr)
                                                  ,env-var
                                                  ,ram-var))))
-                (values (make-closure :env env :function (compile nil source)) env ram))))
+                (values (make-closure :env env :function (compile nil source) :params args :body body-expr) env ram))))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               (let ((result (if (eval-expr condition env)
@@ -312,7 +312,17 @@
                                  (closure api:t)
                                  (t api:nil)))
                               (api:quote (quote-expr arg))
-                              (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))
+                              (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram)))
+                              (api.ram:compile
+                               (let ((x (eval-expr arg env)))
+                                 (etypecase x
+                                   (closure (let ((opt-body (eval-expr `(api.ram:compile-closure
+                                                                         (api:quote ,(closure-body x))
+                                                                         (api:quote ,(closure-params x))
+                                                                         (api:quote api:nil) ;; TODO: broken RAM
+                                                                         (api:quote ,(closure-env x)))
+                                                                       env)))
+                                              (eval-expr `(api:lambda ,(closure-params x) ,opt-body) (closure-env x))))))))))
                 (values result env ram))))
            (built-in-binary
             (destructuring-bind (a b) rest

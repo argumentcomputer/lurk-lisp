@@ -291,10 +291,11 @@
            ((eql api:begin)
             (if (null (cdr rest))
                 (eval-expr (car rest) env)
-                (multiple-value-bind (val env ram)
+                (multiple-value-bind (ignored-val new-env new-ram)
                     (eval-expr (car rest) env)
-                  ;; specifically eval the rest with the new ram
-                  (eval-expr-for-p p `(api:begin ,@(cdr rest)) env ram))))
+                  ;; specifically eval the rest with the new ram,
+                  ;; but NOT the new env
+                  (eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head

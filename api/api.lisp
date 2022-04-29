@@ -171,10 +171,10 @@
             (destructuring-bind (var params body) rest
               `(api.ram:defmacro ,var ,params ,(macro-expand body))))
            ((eql api:let)
-            (destructuring-bind (bindings &optional body-expr) rest
+            (destructuring-bind (bindings body-expr) rest
               `(api:let ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
            ((eql api:letrec)
-            (destructuring-bind (bindings &optional body-expr) rest
+            (destructuring-bind (bindings body-expr) rest
               `(api:letrec ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
            ((eql api:lambda)
             (destructuring-bind (args body-expr) rest
@@ -239,7 +239,7 @@
                      (val (eval-expr rhs env)))
                 (values var env (extend-ram-macros ram var val)))))
            ((eql api:let)
-            (destructuring-bind (bindings &optional body-expr) rest
+            (destructuring-bind (bindings body-expr) rest
               (let ((new-env env))
                 (loop for (var val) in bindings
                       ;; Evaluate VAL in NEW-ENV

@@ -45,3 +45,16 @@ The form `(macroexpand <expr>)` evaluates to the expansion of of the evaluation 
 
 The reader converts backquote to `quasi` and comma to `uq` (for unquote) and `,@` to `uqs` (for unquote-splicing).
 Then, `quasi` can be implemented as a Lurk-level recursive macro.
+
+## Compilation
+
+### `(compile <procedure>)`
+
+Compiles a procedure by delegating to `compile-closure`.
+The original procedure is unchanged but can be rebound if necessary.
+
+### `(compile-closure <expr> (<x> ...) <ram> <env>) -> <expr>`
+
+This hook has to be defined in the RAM for `compile` to work.
+It transforms an expression to a (hopefully optimized) expression given some context.
+It can be implemented as a Lurk-level function.

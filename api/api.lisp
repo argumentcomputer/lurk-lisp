@@ -172,10 +172,20 @@
               `(api.ram:defmacro ,var ,params ,(macro-expand body))))
            ((eql api:let)
             (destructuring-bind (bindings body-expr) rest
-              `(api:let ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+              `(api:let
+                   ,(mapcar #'(lambda (b)
+                                (assert (eq nil (cddr b)))
+                                `(,(car b) ,(macro-expand (cadr b))))
+                     bindings)
+                 ,(macro-expand body-expr))))
            ((eql api:letrec)
             (destructuring-bind (bindings body-expr) rest
-              `(api:letrec ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+              `(api:letrec
+                ,(mapcar #'(lambda (b)
+                             (assert (eq nil (cddr b)))
+                             `(,(car b) ,(macro-expand (cadr b))))
+                         bindings)
+                ,(macro-expand body-expr))))
            ((eql api:lambda)
             (destructuring-bind (args body-expr) rest
               (if (or (null args) (null (cdr args)))
@@ -185,8 +195,12 @@
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               `(api:if ,(macro-expand condition) ,(macro-expand a) ,(macro-expand b))))
-           ((eql api:current-env) expr)
-           ((eql api.ram:current-ram) expr)
+           ((eql api:current-env)
+            (assert (eq nil rest))
+            expr)
+           ((eql api.ram:current-ram)
+            (assert (eq nil rest))
+            expr)
            ((eql api:eval)
             `(api:eval ,@(mapcar #'macro-expand rest)))
            ((eql api:begin)

@@ -205,6 +205,8 @@
             `(api:eval ,@(mapcar #'macro-expand rest)))
            ((eql api:begin)
             `(api:begin ,@(mapcar #'macro-expand rest)))
+           ((eql api:begin1)
+            `(api:begin1 ,@(mapcar #'macro-expand rest)))
            (built-in-unary
             (destructuring-bind (arg) rest
               (case head
@@ -310,6 +312,14 @@
                   ;; specifically eval the rest with the new ram,
                   ;; but NOT the new env
                   (eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
+           ((eql api:begin1)
+            (if (null (cdr rest))
+                (eval-expr (car rest) env)
+                (multiple-value-bind (val ignored-env ram)
+                    (eval-expr (car rest) env)
+                  (multiple-value-bind (ignored-val env ram)
+                      (eval-expr-for-p p `(api:begin ,@(cdr rest)) env ram)
+                    (values val env ram)))))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head

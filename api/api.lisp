@@ -229,11 +229,11 @@
       ((or closure self-evaluating-symbol) (values expr env ram))
       (symbol
        (multiple-value-bind (v found-p)
-           (lookup-find expr (ram-defs ram))
+           (lookup-find expr env)
          (values
           (if found-p
               v
-              (lookup expr env))
+              (lookup expr (ram-defs ram)))
           env ram)))
       (atom (unless (typep expr `(atom ,p))
               (error "~S is out of range [0, ~S)." expr p))

@@ -15,9 +15,15 @@ This threading enables top-level definitions as well as macros generating defini
 
 The RAM is passed in to closures during evaluation, so closures have access to definitions created after them.
 
+### scoping
+
+Global definitions can be shadowed by local definitions.
+
+Global macros cannot be shadowed.
+
 ### `current-ram`
 
-The expression `(current-ram)` evaluates to the current RAM represented as an association list.
+The expression `(current-ram)` evaluates to the current RAM (TODO: representation to be determined).
 
 ## `define`
 

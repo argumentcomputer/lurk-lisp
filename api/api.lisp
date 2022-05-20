@@ -171,11 +171,21 @@
             (destructuring-bind (var params body) rest
               `(api.ram:defmacro ,var ,params ,(macro-expand body))))
            ((eql api:let)
-            (destructuring-bind (bindings &optional body-expr) rest
-              `(api:let ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+            (destructuring-bind (bindings body-expr) rest
+              `(api:let
+                   ,(mapcar #'(lambda (b)
+                                (assert (eq nil (cddr b)))
+                                `(,(car b) ,(macro-expand (cadr b))))
+                     bindings)
+                 ,(macro-expand body-expr))))
            ((eql api:letrec)
-            (destructuring-bind (bindings &optional body-expr) rest
-              `(api:letrec ,(mapcar #'(lambda (b) `(,(car b) ,(macro-expand (cadr b)))) bindings) ,(macro-expand body-expr))))
+            (destructuring-bind (bindings body-expr) rest
+              `(api:letrec
+                ,(mapcar #'(lambda (b)
+                             (assert (eq nil (cddr b)))
+                             `(,(car b) ,(macro-expand (cadr b))))
+                         bindings)
+                ,(macro-expand body-expr))))
            ((eql api:lambda)
             (destructuring-bind (args body-expr) rest
               (if (or (null args) (null (cdr args)))
@@ -185,8 +195,12 @@
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               `(api:if ,(macro-expand condition) ,(macro-expand a) ,(macro-expand b))))
-           ((eql api:current-env) expr)
-           ((eql api.ram:current-ram) expr)
+           ((eql api:current-env)
+            (assert (eq nil rest))
+            expr)
+           ((eql api.ram:current-ram)
+            (assert (eq nil rest))
+            expr)
            ((eql api:eval)
             `(api:eval ,@(mapcar #'macro-expand rest)))
            ((eql api:begin)
@@ -215,11 +229,11 @@
       ((or closure self-evaluating-symbol) (values expr env ram))
       (symbol
        (multiple-value-bind (v found-p)
-           (lookup-find expr (ram-defs ram))
+           (lookup-find expr env)
          (values
           (if found-p
               v
-              (lookup expr env))
+              (lookup expr (ram-defs ram)))
           env ram)))
       (atom (unless (typep expr `(atom ,p))
               (error "~S is out of range [0, ~S)." expr p))
@@ -239,7 +253,7 @@
                      (val (eval-expr rhs env)))
                 (values var env (extend-ram-macros ram var val)))))
            ((eql api:let)
-            (destructuring-bind (bindings &optional body-expr) rest
+            (destructuring-bind (bindings body-expr) rest
               (let ((new-env env))
                 (loop for (var val) in bindings
                       ;; Evaluate VAL in NEW-ENV
@@ -291,10 +305,11 @@
            ((eql api:begin)
             (if (null (cdr rest))
                 (eval-expr (car rest) env)
-                (multiple-value-bind (val env ram)
+                (multiple-value-bind (ignored-val new-env new-ram)
                     (eval-expr (car rest) env)
-                  ;; specifically eval the rest with the new ram
-                  (eval-expr-for-p p `(api:begin ,@(cdr rest)) env ram))))
+                  ;; specifically eval the rest with the new ram,
+                  ;; but NOT the new env
+                  (eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head

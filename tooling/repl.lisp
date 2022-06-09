@@ -5,6 +5,7 @@
 (defparameter *prompt* "> ")
 (defparameter *default-field-order* lurk.api.impl:*default-p*)
 (defparameter *repl-type* :api)
+(defparameter *default-subset-type* 'api.impl:core-subset)
 
 (defstruct repl-state subset package env ram evaluator field-order prompt in out readtable)
 

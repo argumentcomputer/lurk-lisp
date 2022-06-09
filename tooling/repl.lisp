@@ -121,7 +121,7 @@
              (make-repl-and-state :type type :subset subset)
            (dolist (run-pathname to-run)
              (setf state (run repl state run-pathname)))
-           (sb-ext:exit :code 0)))
+           (uiop:quit 0)))
         (t
          (repl :cli t :type type :subset subset))))))
 
@@ -164,7 +164,7 @@
         (error (e) (format (repl-state-out state) "ERROR: ~A" e))
         (condition (c) (format (repl-state-out state) "~A" c))))
     (when cli
-      (sb-ext:exit :code 0))))
+      (uiop:quit 0))))
 
 (deftype meta-form () '(cons (eql !) t))
 

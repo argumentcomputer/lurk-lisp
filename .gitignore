@@ -1,4 +1,5 @@
 *.fasl
+*.*fsl
 *~
 scratch
 bin/*.image

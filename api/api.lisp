@@ -82,7 +82,7 @@
                                          `(integer 0 ,(- p 1))))
 
 ;; An ATOM is a FIELD-ELEMENT, SYMBOL, FUNCTION, or NIL.
-(deftype atom (&optional p) `(or (field-element ,p) symbol nil function closure))
+(deftype atom (&optional p) `(or (field-element ,p) symbol nil function closure character string))
 
 ;; Since it is awkward to express both the constraint on field size and the
 ;; recursive type in the COMMON LISP type system, we provide a second type,
@@ -317,8 +317,18 @@
                                (typecase (eval-expr arg env)
                                  (atom api:t)
                                  (t api:nil)))
-                              (api:car (car (eval-expr arg env)))
-                              (api:cdr (cdr (eval-expr arg env)))
+                              (api:car (let ((v (eval-expr arg env)))
+                                         (if (typep v 'string)
+                                             (if (equal "" v)
+                                                 nil
+                                                 (char v 0))
+                                             (car v))))
+                              (api:cdr (let ((v (eval-expr arg env)))
+                                         (if (typep v 'string)
+                                             (if (equal "" v)
+                                                 ""
+                                                 (subseq v 1))
+                                             (cdr v))))
                               (api:emit (let ((v (eval-expr arg env)))
                                           (emit-out t v)
                                           v))
@@ -336,8 +346,11 @@
                                (api:/ (assert (not (zerop evaled-b)) (evaled-b) "Cannot divide ~S by 0." evaled-a)
                                 (mod (* evaled-a (inverse evaled-b p)) p))
                                (api:= (if (= evaled-a evaled-b) api:t api:nil))
-                               (api:eq (if (eq evaled-a evaled-b) api:t api:nil))
-                               (api:cons (hcons evaled-a evaled-b)))))
+                               (api:eq (if (equal evaled-a evaled-b) api:t api:nil))
+                               (api:cons (if (and (typep evaled-a 'character)
+                                                  (typep evaled-b 'string))
+                                             (concatenate 'string (string evaled-a) evaled-b)
+                                             (hcons evaled-a evaled-b))))))
                 (values result env ram))))
            (t
             ;; (fn . args)

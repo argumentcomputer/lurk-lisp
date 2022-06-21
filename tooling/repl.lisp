@@ -193,7 +193,7 @@
         (assert (not (eq (repl-nil repl) (eval-expr (car rest) state))))
         state)
        (:assert-eq
-        (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state)))
+        (assert (equal (eval-expr (first rest) state) (eval-expr (second rest) state)))
         state)
        (:assert-error
         (assert (handler-case (prog1 nil (eval-expr (first rest) state))

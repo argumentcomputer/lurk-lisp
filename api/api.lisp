@@ -218,9 +218,23 @@
                 (macro-expand (macro-expand-macro expr ram))
                 (nest-apps (mapcar #'macro-expand expr))))))))))
 
+(defparameter *emitted* :uninitialized)
+
+(defmacro with-emission-captured (&body body)
+  `(let ((*emitted* (if :uninitialized
+                        ()
+                        *emitted*)))
+     (multiple-value-bind (new-expr new-env new-ram)
+         (progn ,@body)
+       (values new-expr new-env new-ram (nreverse *emitted*)))))
+
 (defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
+  (with-emission-captured
+    (inner-eval-expr-for-p p expr env ram)))
+
+(defun* (inner-eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (labels ((eval-expr (expr env)
-             (eval-expr-for-p p expr env ram))
+             (inner-eval-expr-for-p p expr env ram))
            (apply-closure (closure args env)
              (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
                     (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
@@ -278,7 +292,7 @@
               (let* ((env-var (gensym "ENV"))
                      (ram-var (gensym "RAM"))
                      (source `(lambda (,ram-var ,env-var ,@args)
-                                (eval-expr-for-p ,p
+                                (inner-eval-expr-for-p ,p
                                                  ;; Close your eyes and believe.
                                                  `(api:let (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
                                                     ,',body-expr)
@@ -309,7 +323,7 @@
                     (eval-expr (car rest) env)
                   ;; specifically eval the rest with the new ram,
                   ;; but NOT the new env
-                  (eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
+                  (inner-eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head
@@ -330,6 +344,7 @@
                                                  (subseq v 1))
                                              (cdr v))))
                               (api:emit (let ((v (eval-expr arg env)))
+                                          (push v *emitted*)
                                           (emit-out t v)
                                           v))
                               (api:quote (quote-expr arg))

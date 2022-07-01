@@ -109,7 +109,7 @@
 (defstruct ram defs macros)
 
 (deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:quote api:macroexpand))
-(deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
+(deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons api:strcons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
 (defvar *cons-table* (make-hash-table :test #'equal))
@@ -362,10 +362,12 @@
                                 (mod (* evaled-a (inverse evaled-b p)) p))
                                (api:= (if (= evaled-a evaled-b) api:t api:nil))
                                (api:eq (if (equal evaled-a evaled-b) api:t api:nil))
-                               (api:cons (if (and (typep evaled-a 'character)
-                                                  (typep evaled-b 'string))
-                                             (concatenate 'string (string evaled-a) evaled-b)
-                                             (hcons evaled-a evaled-b))))))
+                               (api:strcons (if (and (typep evaled-a 'character)
+                                                     (typep evaled-b 'string))
+                                                (concatenate 'string (string evaled-a) evaled-b)
+                                                (error "Wrong type arguments for STRCONS: ~S" (list evaled-a evaled-b))))
+                               (api:cons (hcons evaled-a evaled-b))
+                               )))
                 (values result env ram))))
            (t
             ;; (fn . args)

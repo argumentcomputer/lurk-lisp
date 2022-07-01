@@ -11,7 +11,7 @@
                              (:core "tests/begin.lurk")
                              (:core "tests/eval.lurk")
                              (:core "tests/spec.lurk")
-                             ;(:ram "ram/ram-tests.lurk")
+                             (:ram "ram/ram-tests.lurk")
                              (:ram "ram/ram-begin-tests.lurk")
                              (:ram "ram/macro-tests.lurk")
                              (:ram "ram/quasi-tests.lurk")

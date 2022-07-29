@@ -146,7 +146,7 @@
     (etypecase closure
       (closure (let* ((args (cdr expr))
                       (quoted-args (mapcar (lambda (unevaled) `(quote ,unevaled)) args))
-                      (result (apply (closure-function closure) ram (closure-env closure) quoted-args)))
+                      (result (apply (closure-function closure) #'(lambda (result ram) result) ram (closure-env closure) quoted-args)))
                  result)))))
 
 (defun* (macro-expand-for-p -> expr) ((p integer) (expr expr) (ram ram))
@@ -230,58 +230,79 @@
 
 (defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (with-emission-captured
-    (inner-eval-expr-for-p p expr env ram)))
+    (inner-eval-expr-for-p p expr env ram #'(lambda (expr ram) (values expr env ram)))))
 
-(defun* (inner-eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
-  (labels ((eval-expr (expr env)
-             (inner-eval-expr-for-p p expr env ram))
-           (apply-closure (closure args env)
-             (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
-                    (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
-               (values (apply (closure-function closure) ram (closure-env closure) quoted-args) env ram))))
+(;;defun* (inner-eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
+ defun inner-eval-expr-for-p (p expr env ram cont)
+  (labels ((eval-expr (expr env ram cont)
+             (inner-eval-expr-for-p p expr env ram cont))
+
+           (eval-list (exprs env ram cont)
+             (if (null exprs)
+                 (funcall cont nil ram)
+                 (eval-expr
+                  (car exprs) env ram
+                  #'(lambda (head ram)
+                      (eval-list
+                       (cdr exprs) env ram
+                       #'(lambda (rest ram)
+                           (funcall cont (cons head rest) ram)))))))
+
+           (eval-bindings (bindings body-expr extend-fun env ram cont)
+             (if (null bindings)
+                 (eval-expr body-expr env ram cont)
+                 (let ((var (car (car bindings)))
+                       (rhs (cadr (car bindings))))
+                   (eval-expr
+                    rhs env ram
+                    #'(lambda (evaled ram)
+                        (eval-bindings (cdr bindings) body-expr extend-fun
+                                       (funcall extend-fun env var evaled)
+                                       ram cont))))))
+
+           (apply-closure (closure args env ram cont)
+             (eval-list
+              args env ram
+              #'(lambda (evaled-args ram)
+                  (let* ((quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
+                    (apply (closure-function closure) cont ram (closure-env closure) quoted-args))))))
     (etypecase expr
-      ((or closure self-evaluating-symbol) (values expr env ram))
+      ((or closure self-evaluating-symbol) (funcall cont expr ram))
       (symbol
        (multiple-value-bind (v found-p)
            (lookup-find expr env)
-         (values
+         (funcall cont
           (if found-p
               v
               (lookup expr (ram-defs ram)))
-          env ram)))
+          ram)))
       (atom (unless (typep expr `(atom ,p))
               (error "~S is out of range [0, ~S)." expr p))
-       (values expr env ram))
+       (funcall cont expr ram))
 
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
-           (closure (apply-closure head env rest))
+           (closure (apply-closure head env rest cont))
            ((eql api.ram:define)
             (destructuring-bind (var rhs) rest
-              (let ((val (eval-expr rhs env)))
-                (values var env (extend-ram-defs ram var val)))))
+              (eval-expr
+               rhs env ram
+               #'(lambda (val ram)
+                   (funcall cont var (extend-ram-defs ram var val))))))
            ((eql api.ram:defmacro)
             (destructuring-bind (var params body) rest
-              (let* ((rhs `(api:lambda ,params ,body))
-                     (val (eval-expr rhs env)))
-                (values var env (extend-ram-macros ram var val)))))
+              (let* ((rhs `(api:lambda ,params ,body)))
+                (eval-expr
+                 rhs env ram
+                 #'(lambda (val ram)
+                     (funcall cont var (extend-ram-macros ram var val)))))))
            ((eql api:let)
             (destructuring-bind (bindings body-expr) rest
-              (let ((new-env env))
-                (loop for (var val) in bindings
-                      ;; Evaluate VAL in NEW-ENV
-                      for evaled = (eval-expr val new-env)
-                      do (setq new-env (extend new-env var evaled)))
-                (eval-expr body-expr new-env))))
+              (eval-bindings bindings body-expr #'extend env ram cont)))
            ((eql api:letrec)
             (destructuring-bind (bindings body-expr) rest
-              (let ((new-env env))
-                (loop for (var val) in bindings
-                      ;; Evaluate VAL in NEW-ENV
-                      for evaled = (eval-expr val new-env)
-                      do (setq new-env (extend-rec new-env var evaled)))
-                (eval-expr body-expr new-env))))
+              (eval-bindings bindings body-expr #'extend-rec env ram cont)))
            ((eql api:lambda)
             (destructuring-bind (args body-expr) rest
               ;; Since there are currently no side-effects, supporting multiple
@@ -291,90 +312,112 @@
               ;; first expressions in the body.
               (let* ((env-var (gensym "ENV"))
                      (ram-var (gensym "RAM"))
-                     (source `(lambda (,ram-var ,env-var ,@args)
+                     (cont-var (gensym "CONT"))
+                     (source `(lambda (,cont-var ,ram-var ,env-var ,@args)
                                 (inner-eval-expr-for-p ,p
                                                  ;; Close your eyes and believe.
                                                  `(api:let (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
                                                     ,',body-expr)
                                                  ,env-var
-                                                 ,ram-var))))
-                (values (make-closure :env env :function (compile nil source)) env ram))))
+                                                 ,ram-var
+                                                 ,cont-var))))
+                (funcall cont (make-closure :env env :function (compile nil source)) ram))))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
-              (let ((result (if (eval-expr condition env)
-                                (eval-expr a env)
-                                (eval-expr b env))))
-                (values result env ram))))
+              (eval-expr
+               condition env ram
+               #'(lambda (condition ram)
+                   (if condition
+                       (eval-expr a env ram cont)
+                       (eval-expr b env ram cont))))))
            #+(or) ;; Disabled initially, since variadic functions aren't simple in other implementations.
            ((eql api:list)
-            (values (hlist* (mapcar (lambda (x) (eval-expr x env)) rest))
-                    env
-                    ram))
-           ((eql api:current-env) (values env env ram))
-           ((eql api.ram:current-ram) (values ram env ram))
+            (eval-list
+             rest env ram
+             #'(lambda (evaled-rest))
+             (funcall cont (hlist* evaled-rest) env ram)))
+           ((eql api:current-env) (funcall cont env ram))
+           ((eql api.ram:current-ram) (funcall cont ram ram))
            ((eql api:eval)
-            (let ((ev-expr (macro-expand-for-p p (eval-expr (car rest) env) ram))
-                  (ev-env (if (null (cdr rest)) (empty-env) (eval-expr (car (cdr rest)) env))))
-              (eval-expr ev-expr ev-env)))
+            (eval-expr
+             (car rest) env ram
+             #'(lambda (v ram)
+                 (let ((ev-expr (macro-expand-for-p p v ram)))
+                   (if (null (cdr rest))
+                       (eval-expr ev-expr (empty-env) ram cont)
+                       (eval-expr
+                        (car (cdr rest)) env ram
+                        #'(lambda (ev-env ram)
+                            (eval-expr ev-expr ev-env ram cont))))))))
            ((eql api:begin)
             (if (null (cdr rest))
-                (eval-expr (car rest) env)
-                (multiple-value-bind (ignored-val new-env new-ram)
-                    (eval-expr (car rest) env)
-                  ;; specifically eval the rest with the new ram,
-                  ;; but NOT the new env
-                  (inner-eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
+                (eval-expr (car rest) env ram cont)
+                (eval-expr
+                 (car rest) env ram
+                 #'(lambda (ignored-val ram)
+                     (inner-eval-expr-for-p p `(api:begin ,@(cdr rest)) env ram cont)))))
            (built-in-unary
             (destructuring-bind (arg) rest
-              (let ((result (ecase head
-                              (api:atom
-                               (typecase (eval-expr arg env)
-                                 (atom api:t)
-                                 (t api:nil)))
-                              (api:car (let ((v (eval-expr arg env)))
-                                         (if (typep v 'string)
+              (case head
+                (api:quote (funcall cont (quote-expr arg) ram))
+                (otherwise
+                 (eval-expr
+                  arg env ram
+                  #'(lambda (v ram)
+                      (let ((result
+                              (ecase head
+                                (api:atom
+                                 (typecase v
+                                   (atom api:t)
+                                   (t api:nil)))
+                                (api:car (if (typep v 'string)
                                              (if (equal "" v)
                                                  nil
                                                  (char v 0))
-                                             (car v))))
-                              (api:cdr (let ((v (eval-expr arg env)))
-                                         (if (typep v 'string)
+                                             (car v)))
+                                (api:cdr (if (typep v 'string)
                                              (if (equal "" v)
                                                  ""
                                                  (subseq v 1))
-                                             (cdr v))))
-                              (api:emit (let ((v (eval-expr arg env)))
-                                          (push v *emitted*)
-                                          (emit-out t v)
-                                          v))
-                              (api:quote (quote-expr arg))
-                              (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))
-                (values result env ram))))
+                                             (cdr v)))
+                                (api:emit
+                                 (push v *emitted*)
+                                 (emit-out t v)
+                                 v)
+                                (api:macroexpand (quote-expr (macro-expand-for-p p v ram))))))
+                        (funcall cont result ram))))))))
            (built-in-binary
             (destructuring-bind (a b) rest
-              (let* ((evaled-a (eval-expr a env))
-                     (evaled-b (eval-expr b env))
-                     (result (ecase head
-                               (api:+ (mod (+ evaled-a evaled-b) p))
-                               (api:- (mod (- evaled-a evaled-b) p))
-                               (api:* (mod (* evaled-a evaled-b) p))
-                               (api:/ (assert (not (zerop evaled-b)) (evaled-b) "Cannot divide ~S by 0." evaled-a)
-                                (mod (* evaled-a (inverse evaled-b p)) p))
-                               (api:= (if (= evaled-a evaled-b) api:t api:nil))
-                               (api:eq (if (equal evaled-a evaled-b) api:t api:nil))
-                               (api:strcons (if (and (typep evaled-a 'character)
-                                                     (typep evaled-b 'string))
-                                                (concatenate 'string (string evaled-a) evaled-b)
-                                                (error "Wrong type arguments for STRCONS: ~S" (list evaled-a evaled-b))))
-                               (api:cons (hcons evaled-a evaled-b))
-                               )))
-                (values result env ram))))
+              (eval-expr
+               a env ram
+               #'(lambda (evaled-a ram)
+                   (eval-expr
+                    b env ram
+                    #'(lambda (evaled-b ram)
+                        (let ((result (ecase head
+                                        (api:+ (mod (+ evaled-a evaled-b) p))
+                                        (api:- (mod (- evaled-a evaled-b) p))
+                                        (api:* (mod (* evaled-a evaled-b) p))
+                                        (api:/ (assert (not (zerop evaled-b)) (evaled-b) "Cannot divide ~S by 0." evaled-a)
+                                         (mod (* evaled-a (inverse evaled-b p)) p))
+                                        (api:= (if (= evaled-a evaled-b) api:t api:nil))
+                                        (api:eq (if (equal evaled-a evaled-b) api:t api:nil))
+                                        (api:strcons (if (and (typep evaled-a 'character)
+                                                              (typep evaled-b 'string))
+                                                         (concatenate 'string (string evaled-a) evaled-b)
+                                                         (error "Wrong type arguments for STRCONS: ~S" (list evaled-a evaled-b))))
+                                        (api:cons (hcons evaled-a evaled-b))
+                                        )))
+                          (funcall cont result ram))))))))
            (t
             ;; (fn . args)
             ;; First evaluate FN, then substitue result in new expression to evaluate.
-            (let ((evaled (eval-expr head env)))
+            (eval-expr
+             head env ram
+             #'(lambda (evaled ram)
               (etypecase evaled
-                (closure (apply-closure evaled rest env)))))))))))
+                (closure (apply-closure evaled rest env ram cont)))))
+)))))))
 
 ;; TODO: Make the cons store an explicit argument here and of CONS.
 ;; Returns a value EQUAL to EXPR, but with all CONS subexpressions

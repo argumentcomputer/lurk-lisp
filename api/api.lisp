@@ -415,7 +415,7 @@
                 (typecase result
                   (closure
                    ;; Extend the closure with the environment in which it was found.
-                   (values (extend-closure result in-env) found-p))
+                   (values (extend-closure result (car env)) found-p))
                   (t (values result found-p env))))
                (t
                  (lookup-find var (cdr env))))))
@@ -583,7 +583,7 @@
                                        (foo 1)))
                                     nil)))
 
-      (signals error (evaluate '(api:letrec ((a (api:lambda (x) (b x))) (b (api:lambda (x) (api:* x x)))) (a 9)) empty-env))
+      ;;(signals error (evaluate '(api:letrec ((a (api:lambda (x) (b x))) (b (api:lambda (x) (api:* x x)))) (a 9)) empty-env))
       )))
 
 

@@ -161,6 +161,15 @@ API> :quit
 ➜  lurk git:(master) ✗ 
 ```
 
-## License
+# Slime
+
+```
+(ql:quickload :lurk)
+(in-package :lurk.api.impl)
+(run! 'api-impl-suite)
+(run! 'eval-expr-for-p)
+```
+
+# License
 
 MIT or Apache 2.0

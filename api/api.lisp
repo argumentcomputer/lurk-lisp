@@ -82,7 +82,7 @@
                                          `(integer 0 ,(- p 1))))
 
 ;; An ATOM is a FIELD-ELEMENT, SYMBOL, FUNCTION, or NIL.
-(deftype atom (&optional p) `(or (field-element ,p) symbol nil function closure))
+(deftype atom (&optional p) `(or (field-element ,p) symbol nil function closure character string))
 
 ;; Since it is awkward to express both the constraint on field size and the
 ;; recursive type in the COMMON LISP type system, we provide a second type,
@@ -109,7 +109,7 @@
 (defstruct ram defs macros)
 
 (deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:procedure api:quote api:macroexpand api.ram:compile))
-(deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons))
+(deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons api:strcons))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
 (defvar *cons-table* (make-hash-table :test #'equal))
@@ -218,9 +218,23 @@
                 (macro-expand (macro-expand-macro expr ram))
                 (nest-apps (mapcar #'macro-expand expr))))))))))
 
+(defparameter *emitted* :uninitialized)
+
+(defmacro with-emission-captured (&body body)
+  `(let ((*emitted* (if :uninitialized
+                        ()
+                        *emitted*)))
+     (multiple-value-bind (new-expr new-env new-ram)
+         (progn ,@body)
+       (values new-expr new-env new-ram (nreverse *emitted*)))))
+
 (defun* (eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
+  (with-emission-captured
+    (inner-eval-expr-for-p p expr env ram)))
+
+(defun* (inner-eval-expr-for-p -> (values expr env ram)) ((p integer) (expr expr) (env env) (ram ram))
   (labels ((eval-expr (expr env)
-             (eval-expr-for-p p expr env ram))
+             (inner-eval-expr-for-p p expr env ram))
            (apply-closure (closure args env)
              (let* ((evaled-args (mapcar (lambda (x) (eval-expr x env)) args))
                     (quoted-args (mapcar (lambda (evaled) `(quote ,evaled)) evaled-args)))
@@ -278,7 +292,7 @@
               (let* ((env-var (gensym "ENV"))
                      (ram-var (gensym "RAM"))
                      (source `(lambda (,ram-var ,env-var ,@args)
-                                (eval-expr-for-p ,p
+                                (inner-eval-expr-for-p ,p
                                                  ;; Close your eyes and believe.
                                                  `(api:let (,,@(mapcar (lambda (arg) `(list ',arg ,arg)) args))
                                                     ,',body-expr)
@@ -309,7 +323,7 @@
                     (eval-expr (car rest) env)
                   ;; specifically eval the rest with the new ram,
                   ;; but NOT the new env
-                  (eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
+                  (inner-eval-expr-for-p p `(api:begin ,@(cdr rest)) env new-ram))))
            (built-in-unary
             (destructuring-bind (arg) rest
               (let ((result (ecase head
@@ -317,9 +331,20 @@
                                (typecase (eval-expr arg env)
                                  (atom api:t)
                                  (t api:nil)))
-                              (api:car (car (eval-expr arg env)))
-                              (api:cdr (cdr (eval-expr arg env)))
+                              (api:car (let ((v (eval-expr arg env)))
+                                         (if (typep v 'string)
+                                             (if (equal "" v)
+                                                 nil
+                                                 (char v 0))
+                                             (car v))))
+                              (api:cdr (let ((v (eval-expr arg env)))
+                                         (if (typep v 'string)
+                                             (if (equal "" v)
+                                                 ""
+                                                 (subseq v 1))
+                                             (cdr v))))
                               (api:emit (let ((v (eval-expr arg env)))
+                                          (push v *emitted*)
                                           (emit-out t v)
                                           v))
                               (api:procedure
@@ -353,8 +378,13 @@
                                (api:/ (assert (not (zerop evaled-b)) (evaled-b) "Cannot divide ~S by 0." evaled-a)
                                 (mod (* evaled-a (inverse evaled-b p)) p))
                                (api:= (if (= evaled-a evaled-b) api:t api:nil))
-                               (api:eq (if (eq evaled-a evaled-b) api:t api:nil))
-                               (api:cons (hcons evaled-a evaled-b)))))
+                               (api:eq (if (equal evaled-a evaled-b) api:t api:nil))
+                               (api:strcons (if (and (typep evaled-a 'character)
+                                                     (typep evaled-b 'string))
+                                                (concatenate 'string (string evaled-a) evaled-b)
+                                                (error "Wrong type arguments for STRCONS: ~S" (list evaled-a evaled-b))))
+                               (api:cons (hcons evaled-a evaled-b))
+                               )))
                 (values result env ram))))
            (t
             ;; (fn . args)

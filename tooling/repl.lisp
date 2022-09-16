@@ -5,6 +5,7 @@
 (defparameter *prompt* "> ")
 (defparameter *default-field-order* lurk.api.impl:*default-p*)
 (defparameter *repl-type* :api)
+(defparameter *default-subset-type* 'api.impl:core-subset)
 
 (defstruct repl-state subset package env ram evaluator field-order prompt in out readtable)
 
@@ -121,7 +122,7 @@
              (make-repl-and-state :type type :subset subset)
            (dolist (run-pathname to-run)
              (setf state (run repl state run-pathname)))
-           (sb-ext:exit :code 0)))
+           (uiop:quit 0)))
         (t
          (repl :cli t :type type :subset subset))))))
 
@@ -164,7 +165,7 @@
         (error (e) (format (repl-state-out state) "ERROR: ~A" e))
         (condition (c) (format (repl-state-out state) "~A" c))))
     (when cli
-      (sb-ext:exit :code 0))))
+      (uiop:quit 0))))
 
 (deftype meta-form () '(cons (eql !) t))
 
@@ -187,26 +188,32 @@
     (cons
      (destructuring-bind (head . rest)
          form
-     (case head
-       (:assert
-        (assert (not (eq (repl-nil repl) (eval-expr (car rest) state))))
-        state)
-       (:assert-eq
-        (assert (eq (eval-expr (first rest) state) (eval-expr (second rest) state)))
-        state)
-       (:assert-error
-        (assert (handler-case (prog1 nil (eval-expr (first rest) state))
-                  (error () t)))
-        state)
-       (:clear
-        (let ((new-state (copy-repl-state state)))
-          (setf (repl-state-env new-state) (api-impl:empty-env))
-          new-state))
-       (:load
-        (let ((new-state (load-lib state (car rest))))
-          new-state))
-       (t (format (repl-state-out state) "Unhandled: ~S" head)
-        state))))
+       (ecase head
+         (:assert
+          (assert (not (eq (repl-nil repl) (eval-expr (car rest) state))))
+          state)
+         (:assert-eq
+          (assert (equal (eval-expr (first rest) state) (eval-expr (second rest) state)))
+          state)
+         (:assert-error
+          (assert (handler-case (prog1 nil (eval-expr (first rest) state))
+                    (error () t)))
+          state)
+         (:assert-emitted
+          (multiple-value-bind (expr env ram emitted)
+              (eval-expr (second rest) state)
+            (declare (ignore expr env ram))
+            (assert (equal (eval-expr (first rest) state) emitted))
+            state))
+         (:clear
+          (let ((new-state (copy-repl-state state)))
+            (setf (repl-state-env new-state) (api-impl:empty-env))
+            new-state))
+         (:load
+          (let ((new-state (load-lib state (car rest))))
+            new-state))
+         (t (format (repl-state-out state) "Unhandled: ~S" head)
+          state))))
     (t (format (repl-state-out state) "Unhandled: ~S" form)
      state)))
 

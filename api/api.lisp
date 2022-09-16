@@ -362,7 +362,7 @@
                                                      `((((api.ram:compile-closure
                                                           (api:quote ,(closure-body x)))
                                                          (api:quote ,(closure-params x)))
-                                                        api:nil) ;; TODO: broken RAM
+                                                        (api:quote ,(ram-defs ram)))
                                                        (api:quote ,(closure-env x)))
                                                      env)))
                                       (eval-expr `(api:lambda ,(closure-params x) ,opt-body) (closure-env x))))))))))

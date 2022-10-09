@@ -256,7 +256,7 @@
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
-           (closure (apply-closure head env rest))
+           (closure (apply-closure head rest env))
            ((eql api.ram:define)
             (destructuring-bind (var rhs) rest
               (let ((val (eval-expr rhs env)))

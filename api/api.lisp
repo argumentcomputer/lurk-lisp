@@ -108,8 +108,8 @@
 
 (defstruct ram defs macros)
 
-(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:quote api:macroexpand))
-(deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons api:strcons))
+(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:quote api:macroexpand api:commit api:comm api:open api:num api:char))
+(deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons api:strcons api:hide api:< api:<= api:> api:>=))
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
 (defvar *cons-table* (make-hash-table :test #'equal))
@@ -347,6 +347,15 @@
                                           (push v *emitted*)
                                           (emit-out t v)
                                           v))
+                              (api:commit (eval-expr arg env)) ;; dummy impl.
+                              (api:open (eval-expr arg env)) ;; dummy impl.
+                              (api:comm (eval-expr arg env))   ;; dummy impl.
+                              (api:num (let ((v (eval-expr arg env)))
+                                         (typecase v
+                                           (character (char-int v))
+                                           (t v)))) ;; partially dummy
+                              (api:char (let ((v (eval-expr arg env)))
+                                          (code-char v)))
                               (api:quote (quote-expr arg))
                               (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))
                 (values result env ram))))
@@ -360,14 +369,18 @@
                                (api:* (mod (* evaled-a evaled-b) p))
                                (api:/ (assert (not (zerop evaled-b)) (evaled-b) "Cannot divide ~S by 0." evaled-a)
                                 (mod (* evaled-a (inverse evaled-b p)) p))
-                               (api:= (if (= evaled-a evaled-b) api:t api:nil))
-                               (api:eq (if (equal evaled-a evaled-b) api:t api:nil))
+                               (api:= (bool (= evaled-a evaled-b)))
+                               (api:eq (bool (equal evaled-a evaled-b)))
                                (api:strcons (if (and (typep evaled-a 'character)
                                                      (typep evaled-b 'string))
                                                 (concatenate 'string (string evaled-a) evaled-b)
                                                 (error "Wrong type arguments for STRCONS: ~S" (list evaled-a evaled-b))))
                                (api:cons (hcons evaled-a evaled-b))
-                               )))
+                               (api:hide evaled-b) ;; dummy
+                               (api:<  (bool (p< p evaled-a evaled-b)))
+                               (api:<= (bool (p<= p evaled-a evaled-b)))
+                               (api:> (bool (p> p evaled-a evaled-b)))
+                               (api:>= (bool (p>= p evaled-a evaled-b))))))
                 (values result env ram))))
            (t
             ;; (fn . args)
@@ -375,6 +388,39 @@
             (let ((evaled (eval-expr head env)))
               (etypecase evaled
                 (closure (apply-closure evaled rest env)))))))))))
+
+(defun bool (b)
+  (if b api:t api:nil))
+
+(defun p-most-positive (p)
+  (/ (mod -1 p) 2))
+
+(defun p-is-negative (p x)
+  (> (mod x p) (p-most-positive p)))
+
+(defun p< (p a b)
+  (let ((na (p-is-negative p a))
+        (nb (p-is-negative p b)))
+    (if na
+        (if nb
+            (p<aux p a b)
+            t)
+        (if nb
+            nil
+            (p<aux p a b)))))
+
+
+(defun p<aux (p a b)
+  (p-is-negative p (- a b)))
+
+(defun p<= (p a b)
+  (or (p< p a b) (= (mod p a) (mod p b))))
+
+(defun p> (p a b)
+  (p< p b a))
+
+(defun p>= (p a b)
+  (p<= p b a))
 
 ;; TODO: Make the cons store an explicit argument here and of CONS.
 ;; Returns a value EQUAL to EXPR, but with all CONS subexpressions

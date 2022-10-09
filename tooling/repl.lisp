@@ -149,6 +149,13 @@
                                  :readtable readtable)))
     (values repl state)))
 
+(defun convert-to-lurk (p e)
+  (labels ((rec (e) (convert-to-lurk p e)))
+    (cond
+      ((rationalp e) (mod (* (numerator e) (api.impl:inverse (denominator e) p)) p))
+      ((consp e) (cons (rec (car e)) (rec (cdr e))))
+      (t e))))
+
 (defun repl (&rest keys &key (in *standard-input*) (out *standard-output*) (field-order *default-field-order*) (prompt nil prompt-p)
                           cli (type *repl-type*) (subset (api.impl:intern-subset *default-subset-type*)))
   (multiple-value-bind (repl state)
@@ -218,7 +225,7 @@
      state)))
 
 (defun eval-expr (expr state)
-  (funcall (repl-state-evaluator state) expr (repl-state-env state) (repl-state-ram state)))
+  (funcall (repl-state-evaluator state) (convert-to-lurk (repl-state-field-order state) expr) (repl-state-env state) (repl-state-ram state)))
 
 (defun read-with-prompt (repl-state &key (in *standard-input*) (out *standard-output*))
   (let ((*package* (repl-state-package repl-state))

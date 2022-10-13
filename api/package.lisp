@@ -5,7 +5,7 @@
   (:use :common-lisp)
   ;; QUOTE and NIL are not shadowed, to ease list syntax handling.
   (:shadow #:atom #:car #:cdr #:cons #:eq #:eval #:if #:lambda #:t #:+ #:- #:* #:/ #:= #:char #:< #:<= #:> #:>= #:open)
-  (:export #:atom #:begin #:car #:cdr #:cons #:current-env #:emit #:eq #:eval #:if #:lambda #:let #:letrec #:macroexpand #:nil #:quote #:strcons
+  (:export #:atom #:begin #:car #:cdr #:cons #:current-env #:emit #:eq #:eval #:if #:lambda #:let #:letrec #:macroexpand #:functionp #:nil #:quote #:strcons
            #:t #:+ #:- #:* #:/ #:=
            #:< #:<= #:> #:>=
            #:commit #:comm #:num #:open #:hide #:char))
@@ -14,10 +14,11 @@
   (:nicknames :api.ram)
   (:use :common-lisp :lurk.api)
   (:shadowing-import-from :lurk.api #:atom #:car #:cdr #:cons #:defmacro #:eq #:eval #:if #:lambda #:macroexpand #:t #:+ #:- #:* #:/ #:= #:char #:< #:<= #:> #:>= #:open)
-  (:export #:atom #:car #:cdr #:cons #:current-env #:current-ram #:define #:defmacro #:eq #:eval #:if #:lambda #:macroexpand #:let #:letrec #:nil #:quote #:strcons
+  (:export #:atom #:car #:cdr #:cons #:current-env #:current-ram #:define #:defmacro #:eq #:eval #:if #:lambda #:let #:letrec #:macroexpand  #:functionp #:nil #:quote #:strcons
            #:t #:+ #:- #:* #:/ #:=
            #:< #:<= #:> #:>=
            #:commit #:comm #:num #:open #:hide #:char
+           #:compile #:compile-closure
            #:quasi #:uq #:uqs))
 
 (defpackage lurk.api.impl

@@ -67,11 +67,11 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defstruct closure env function)
+(defstruct closure env function params body)
 
 (defun* (extend-closure -> closure) ((c closure) (rec-env env))
   (let ((extended (hcons rec-env (closure-env c))))
-    (make-closure :env extended :function (closure-function c))))
+    (make-closure :env extended :function (closure-function c) :params (closure-params c) :body (closure-body c))))
 
 ;; The following types loosely specify the language which EXPR allows.
 
@@ -108,8 +108,9 @@
 
 (defstruct ram defs macros)
 
-(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:quote api:macroexpand api:commit api:comm api:open api:num api:char))
+(deftype built-in-unary () '(member api:atom api:car api:cdr api:emit api:quote api:macroexpand api:commit api:comm api:open api:num api:char api:functionp api.ram:compile))
 (deftype built-in-binary () '(member api:+ api:- api:/ api:* api:= api:eq api:cons api:strcons api:hide api:< api:<= api:> api:>=))
+
 (deftype self-evaluating-symbol () '(member api:nil api:t))
 
 (defvar *cons-table* (make-hash-table :test #'equal))
@@ -256,7 +257,7 @@
       (list
        (destructuring-bind (head &rest rest) expr
          (etypecase head
-           (closure (apply-closure head env rest))
+           (closure (apply-closure head rest env))
            ((eql api.ram:define)
             (destructuring-bind (var rhs) rest
               (let ((val (eval-expr rhs env)))
@@ -298,7 +299,7 @@
                                                     ,',body-expr)
                                                  ,env-var
                                                  ,ram-var))))
-                (values (make-closure :env env :function (compile nil source)) env ram))))
+                (values (make-closure :env env :function (compile nil source) :params args :body body-expr) env ram))))
            ((eql api:if)
             (destructuring-bind (condition a b) rest
               (let ((result (if (eval-expr condition env)
@@ -347,6 +348,10 @@
                                           (push v *emitted*)
                                           (emit-out t v)
                                           v))
+                              (api:functionp
+                               (typecase (eval-expr arg env)
+                                 (closure api:t)
+                                 (t api:nil)))
                               (api:commit (eval-expr arg env)) ;; dummy impl.
                               (api:open (eval-expr arg env)) ;; dummy impl.
                               (api:comm (eval-expr arg env))   ;; dummy impl.
@@ -357,7 +362,20 @@
                               (api:char (let ((v (eval-expr arg env)))
                                           (code-char v)))
                               (api:quote (quote-expr arg))
-                              (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram))))))
+                              (api:macroexpand (quote-expr (macro-expand-for-p p (eval-expr arg env) ram)))
+                              (api.ram:compile
+                               (let ((x (eval-expr arg env)))
+                                 (etypecase x
+                                   (closure
+                                    (let ((opt-body (eval-expr
+                                                     ;; auto-currying!
+                                                     `((((api.ram:compile-closure
+                                                          (api:quote ,(closure-body x)))
+                                                         (api:quote ,(closure-params x)))
+                                                        (api:quote ,(ram-defs ram)))
+                                                       (api:quote ,(closure-env x)))
+                                                     env)))
+                                      (eval-expr `(api:lambda ,(closure-params x) ,opt-body) (closure-env x))))))))))
                 (values result env ram))))
            (built-in-binary
             (destructuring-bind (a b) rest

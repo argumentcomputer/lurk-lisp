@@ -94,7 +94,7 @@
 
 ;; Although there are still unhandled edge cases (e.g. function signatures are
 ;; unrestricted by this type), the intent is that EXPR is a tree of CONS cells
-;; terminating in ATOMs. EXPRs need not be balanced or homogenous in shape. A
+;; terminating in ATOMs. EXPRs need not be balanced or homogeneous in shape. A
 ;; single ATOM is a zero-height tree.
 (deftype expr () `(satisfies expr-p))
 
@@ -402,7 +402,7 @@
                 (values result env ram))))
            (t
             ;; (fn . args)
-            ;; First evaluate FN, then substitue result in new expression to evaluate.
+            ;; First evaluate FN, then substitute result in new expression to evaluate.
             (let ((evaled (eval-expr head env)))
               (etypecase evaled
                 (closure (apply-closure evaled rest env)))))))))))

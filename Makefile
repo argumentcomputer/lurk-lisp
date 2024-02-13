@@ -14,6 +14,6 @@ repl : image
 	@bin/lurk
 
 # Run repl after loading Lurk.
-# Slower startup than replx afer image is dumped, but faster for one-off runs.
+# Slower startup than replx after image is dumped, but faster for one-off runs.
 replx :
 	@bin/lurkx
